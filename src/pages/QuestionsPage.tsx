@@ -54,39 +54,81 @@ function clearSessionLocal(userId: string) {
 }
 
 const QUESTIONS_BATCH_SIZE = 500;
+const QUESTION_DETAILS_BATCH_SIZE = 100;
 type QuestionWithOptions = Question & { question_options: QuestionOption[] };
-
-async function fetchAllPublishedQuestions(filters?: {
+type QuestionFilters = {
   subjectId?: string;
   topicId?: string;
   difficulty?: "facil" | "medio" | "dificil";
-}) {
-  const allQuestions: QuestionWithOptions[] = [];
+};
+
+function buildPublishedQuestionsQuery(selectClause: string, filters?: QuestionFilters) {
+  let query = supabase
+    .from("questions")
+    .select(selectClause)
+    .eq("status", "publicado")
+    .order("created_at", { ascending: false });
+
+  if (filters?.subjectId) query = query.eq("subject_id", filters.subjectId);
+  if (filters?.topicId) query = query.eq("topic_id", filters.topicId);
+  if (filters?.difficulty) query = query.eq("dificuldade", filters.difficulty);
+
+  return query;
+}
+
+async function fetchAllPublishedQuestionIds(filters?: QuestionFilters) {
+  const allRows: { id: string }[] = [];
   let from = 0;
 
   while (true) {
-    let query = supabase
-      .from("questions")
-      .select("*, question_options(*)")
-      .eq("status", "publicado")
-      .order("created_at", { ascending: false })
+    const { data, error } = await buildPublishedQuestionsQuery("id", filters)
       .range(from, from + QUESTIONS_BATCH_SIZE - 1);
 
-    if (filters?.subjectId) query = query.eq("subject_id", filters.subjectId);
-    if (filters?.topicId) query = query.eq("topic_id", filters.topicId);
-    if (filters?.difficulty) query = query.eq("dificuldade", filters.difficulty);
-
-    const { data, error } = await query;
     if (error) throw error;
     if (!data?.length) break;
 
-    allQuestions.push(...(data as QuestionWithOptions[]));
+    allRows.push(...data);
 
     if (data.length < QUESTIONS_BATCH_SIZE) break;
     from += QUESTIONS_BATCH_SIZE;
   }
 
-  return allQuestions;
+  return allRows.map((row) => row.id);
+}
+
+async function fetchQuestionById(questionId: string) {
+  const { data, error } = await supabase
+    .from("questions")
+    .select("*, question_options(*)")
+    .eq("id", questionId)
+    .single();
+
+  if (error) throw error;
+  return data as QuestionWithOptions;
+}
+
+async function fetchQuestionsByIds(questionIds: string[]) {
+  if (questionIds.length === 0) return [];
+
+  const allQuestions: QuestionWithOptions[] = [];
+
+  for (let from = 0; from < questionIds.length; from += QUESTION_DETAILS_BATCH_SIZE) {
+    const batchIds = questionIds.slice(from, from + QUESTION_DETAILS_BATCH_SIZE);
+    const { data, error } = await supabase
+      .from("questions")
+      .select("*, question_options(*)")
+      .in("id", batchIds);
+
+    if (error) throw error;
+    if (data?.length) {
+      allQuestions.push(...(data as QuestionWithOptions[]));
+    }
+  }
+
+  const questionMap = new Map(allQuestions.map((question) => [question.id, question]));
+  return questionIds
+    .map((questionId) => questionMap.get(questionId))
+    .filter(Boolean) as QuestionWithOptions[];
 }
 
 async function fetchAllPublishedQuestionSubjectIds() {
@@ -227,7 +269,8 @@ const QuestionsPage: React.FC = () => {
   const [totalBySubject, setTotalBySubject] = useState<Record<string, number>>({});
   const [showMateriaSelector, setShowMateriaSelector] = useState(false);
 
-  const [questions, setQuestions] = useState<QuestionWithOptions[]>([]);
+  const [questionIds, setQuestionIds] = useState<string[]>([]);
+  const [loadedQuestions, setLoadedQuestions] = useState<Record<string, QuestionWithOptions>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sessionCorrect, setSessionCorrect] = useState(0);
   const [sessionTotal, setSessionTotal] = useState(0);
@@ -249,11 +292,14 @@ const QuestionsPage: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [restoringSession, setRestoringSession] = useState(true);
-  const [filtersFromRestore, setFiltersFromRestore] = useState<SessionData["filters"] | null>(null);
+  const [, setLoadingCurrentQuestion] = useState(false);
 
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionInitialized = useRef(false);
+  const activeRequestRef = useRef(0);
+  const loadedQuestionsRef = useRef<Record<string, QuestionWithOptions>>({});
+  const inFlightQuestionIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     return () => {
@@ -261,6 +307,45 @@ const QuestionsPage: React.FC = () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, []);
+
+  const mergeLoadedQuestions = useCallback((questionsToMerge: QuestionWithOptions[]) => {
+    if (questionsToMerge.length === 0) return;
+
+    setLoadedQuestions((prev) => {
+      const next = { ...prev };
+      questionsToMerge.forEach((question) => {
+        next[question.id] = question;
+      });
+      loadedQuestionsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const fetchAndStoreQuestions = useCallback(async (ids: string[], requestId: number) => {
+    const missingIds = ids.filter((id) => !loadedQuestionsRef.current[id] && !inFlightQuestionIdsRef.current.has(id));
+    if (missingIds.length === 0) return;
+
+    missingIds.forEach((id) => inFlightQuestionIdsRef.current.add(id));
+
+    try {
+      const fetchedQuestions = missingIds.length === 1
+        ? [await fetchQuestionById(missingIds[0])]
+        : await fetchQuestionsByIds(missingIds);
+
+      if (requestId !== activeRequestRef.current) return;
+      mergeLoadedQuestions(fetchedQuestions);
+    } finally {
+      missingIds.forEach((id) => inFlightQuestionIdsRef.current.delete(id));
+    }
+  }, [mergeLoadedQuestions]);
+
+  const prefetchQuestions = useCallback(async (ids: string[], requestId: number) => {
+    for (let index = 0; index < ids.length; index += QUESTION_DETAILS_BATCH_SIZE) {
+      if (requestId !== activeRequestRef.current) return;
+      const batchIds = ids.slice(index, index + QUESTION_DETAILS_BATCH_SIZE);
+      await fetchAndStoreQuestions(batchIds, requestId);
+    }
+  }, [fetchAndStoreQuestions]);
 
   // Fetch subjects, topics e contagem por matéria
   useEffect(() => {
@@ -308,9 +393,14 @@ const QuestionsPage: React.FC = () => {
 
   // Restore session
   useEffect(() => {
-    if (!user) { setRestoringSession(false); return; }
+    if (!user) {
+      setRestoringSession(false);
+      return;
+    }
 
     const restore = async () => {
+      const requestId = ++activeRequestRef.current;
+
       try {
         const { data } = await supabase
           .from("study_sessions")
@@ -334,33 +424,44 @@ const QuestionsPage: React.FC = () => {
         if (!session) session = loadSessionLocal(user.id);
 
         if (session && session.questionIds.length > 0) {
-          setFiltersFromRestore(session.filters);
           setSelectedSubject(session.filters.subject || "all");
           setSelectedTopic(session.filters.topic || "all");
           setSelectedDifficulty(session.filters.difficulty || "all");
           setSelectedStatus(session.filters.status || "all");
           setSessionCorrect(session.sessionCorrect);
           setSessionTotal(session.sessionTotal);
+          setSessionFinished(false);
+          setSelectedOption(null);
+          setAnswered(false);
+          setShowMateriaSelector(false);
           sessionInitialized.current = true;
 
-          const { data: qData } = await supabase
-            .from("questions")
-            .select("*, question_options(*)")
-            .in("id", session.questionIds);
+          const restoredIndex = Math.min(session.currentIndex, session.questionIds.length - 1);
+          const currentQuestionId = session.questionIds[restoredIndex];
 
-          if (qData && qData.length > 0) {
-            const qMap = new Map(qData.map((q) => [q.id, q]));
-            const ordered = session.questionIds
-              .map((id) => qMap.get(id))
-              .filter(Boolean) as QuestionWithOptions[];
+          setQuestionIds(session.questionIds);
+          setLoadedQuestions({});
+          loadedQuestionsRef.current = {};
+          inFlightQuestionIdsRef.current.clear();
+          setCurrentIndex(restoredIndex);
 
-            if (ordered.length > 0) {
-              setQuestions(ordered);
-              setCurrentIndex(Math.min(session.currentIndex, ordered.length - 1));
-              setLoading(false);
-              setRestoringSession(false);
-              return;
-            }
+          if (currentQuestionId) {
+            setLoadingCurrentQuestion(true);
+            await fetchAndStoreQuestions([currentQuestionId], requestId);
+
+            if (requestId !== activeRequestRef.current) return;
+
+            setLoading(false);
+            setRestoringSession(false);
+            setLoadingCurrentQuestion(false);
+
+            void prefetchQuestions(
+              session.questionIds.filter((id) => id !== currentQuestionId),
+              requestId,
+            ).catch((error) => {
+              console.error("Failed to prefetch restored questions:", error);
+            });
+            return;
           }
         }
       } catch (e) {
@@ -372,7 +473,7 @@ const QuestionsPage: React.FC = () => {
     };
 
     restore();
-  }, [user]);
+  }, [user, fetchAndStoreQuestions, prefetchQuestions]);
 
   // Fetch questions when filters change
   useEffect(() => {
@@ -383,44 +484,73 @@ const QuestionsPage: React.FC = () => {
     }
 
     const fetchQuestions = async () => {
+      const requestId = ++activeRequestRef.current;
+
       setLoading(true);
+      setLoadingCurrentQuestion(false);
+      setLoadedQuestions({});
+      loadedQuestionsRef.current = {};
+      inFlightQuestionIdsRef.current.clear();
+      setQuestionIds([]);
+      setCurrentIndex(0);
+      setSelectedOption(null);
+      setAnswered(false);
+      setSessionCorrect(0);
+      setSessionTotal(0);
+      setSessionFinished(false);
+      setShowMateriaSelector(false);
       try {
-        const allQuestions = await fetchAllPublishedQuestions({
+        const allQuestionIds = await fetchAllPublishedQuestionIds({
           subjectId: selectedSubject !== "all" ? selectedSubject : undefined,
           topicId: selectedTopic !== "all" ? selectedTopic : undefined,
           difficulty: selectedDifficulty !== "all"
             ? selectedDifficulty as "facil" | "medio" | "dificil"
             : undefined,
         });
-        let filtered = allQuestions;
+        let filteredQuestionIds = allQuestionIds;
 
         if (selectedStatus === "nao_respondidas") {
-          filtered = filtered.filter((q) => !attemptedQuestions.has(q.id));
+          filteredQuestionIds = filteredQuestionIds.filter((id) => !attemptedQuestions.has(id));
         } else if (selectedStatus === "respondidas") {
-          filtered = filtered.filter((q) => attemptedQuestions.has(q.id));
+          filteredQuestionIds = filteredQuestionIds.filter((id) => attemptedQuestions.has(id));
         } else if (selectedStatus === "erradas") {
-          filtered = filtered.filter((q) => incorrectQuestions.has(q.id));
+          filteredQuestionIds = filteredQuestionIds.filter((id) => incorrectQuestions.has(id));
         } else if (selectedStatus === "favoritas") {
-          filtered = filtered.filter((q) => bookmarkedQuestions.has(q.id));
+          filteredQuestionIds = filteredQuestionIds.filter((id) => bookmarkedQuestions.has(id));
         }
 
-        setQuestions(filtered);
-        setCurrentIndex(0);
-        setSelectedOption(null);
-        setAnswered(false);
-        setSessionCorrect(0);
-        setSessionTotal(0);
-        setSessionFinished(false);
-        setShowMateriaSelector(false);
+        if (requestId !== activeRequestRef.current) return;
 
-        if (user && filtered.length > 0) {
-          persistSession(filtered.map((q) => q.id), 0, 0, 0);
+        setQuestionIds(filteredQuestionIds);
+
+        if (filteredQuestionIds.length === 0) {
+          setLoading(false);
+          return;
         }
+
+        setLoadingCurrentQuestion(true);
+        await fetchAndStoreQuestions([filteredQuestionIds[0]], requestId);
+
+        if (requestId !== activeRequestRef.current) return;
+
+        setLoading(false);
+        setLoadingCurrentQuestion(false);
+
+        if (user) {
+          persistSession(filteredQuestionIds, 0, 0, 0);
+        }
+
+        void prefetchQuestions(filteredQuestionIds.slice(1), requestId).catch((error) => {
+          console.error("Failed to prefetch questions:", error);
+        });
       } catch (error) {
         console.error("Failed to fetch questions:", error);
         toast.error("Não foi possível carregar todas as questões.");
       } finally {
-        setLoading(false);
+        if (requestId === activeRequestRef.current) {
+          setLoading(false);
+          setLoadingCurrentQuestion(false);
+        }
       }
     };
     fetchQuestions();
@@ -447,16 +577,16 @@ const QuestionsPage: React.FC = () => {
   }, [user, selectedSubject, selectedTopic, selectedDifficulty, selectedStatus]);
 
   useEffect(() => {
-    if (!user || loading || restoringSession || questions.length === 0) return;
-    persistSession(questions.map((q) => q.id), currentIndex, sessionCorrect, sessionTotal);
-  }, [currentIndex, sessionCorrect, sessionTotal, questions, user, loading, restoringSession, persistSession]);
+    if (!user || loading || restoringSession || questionIds.length === 0) return;
+    persistSession(questionIds, currentIndex, sessionCorrect, sessionTotal);
+  }, [currentIndex, sessionCorrect, sessionTotal, questionIds, user, loading, restoringSession, persistSession]);
 
   useEffect(() => {
     if (!user) return;
     const handleBeforeUnload = () => {
-      if (questions.length > 0) {
+      if (questionIds.length > 0) {
         saveSessionLocal(user.id, {
-          questionIds: questions.map((q) => q.id),
+          questionIds,
           currentIndex, sessionCorrect, sessionTotal,
           filters: { subject: selectedSubject, topic: selectedTopic, difficulty: selectedDifficulty, status: selectedStatus },
           updatedAt: new Date().toISOString(),
@@ -466,20 +596,57 @@ const QuestionsPage: React.FC = () => {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => { handleBeforeUnload(); window.removeEventListener("beforeunload", handleBeforeUnload); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, questions, currentIndex, sessionCorrect, sessionTotal, selectedSubject, selectedTopic, selectedDifficulty, selectedStatus]);
+  }, [user, questionIds, currentIndex, sessionCorrect, sessionTotal, selectedSubject, selectedTopic, selectedDifficulty, selectedStatus]);
 
-  const currentQuestion = questions[currentIndex];
+  const currentQuestionId = questionIds[currentIndex];
+  const currentQuestion = currentQuestionId ? loadedQuestions[currentQuestionId] : undefined;
 
   useEffect(() => {
-    if (currentQuestion) setIsBookmarked(bookmarkedQuestions.has(currentQuestion.id));
+    if (!currentQuestionId) {
+      setLoadingCurrentQuestion(false);
+      return;
+    }
+
+    if (loadedQuestions[currentQuestionId]) {
+      setLoadingCurrentQuestion(false);
+      return;
+    }
+
+    if (inFlightQuestionIdsRef.current.has(currentQuestionId)) {
+      setLoadingCurrentQuestion(true);
+      return;
+    }
+
+    const requestId = activeRequestRef.current;
+    setLoadingCurrentQuestion(true);
+
+    fetchAndStoreQuestions([currentQuestionId], requestId)
+      .catch((error) => {
+        console.error("Failed to fetch current question:", error);
+        toast.error("Não foi possível carregar esta questão.");
+      })
+      .finally(() => {
+        if (requestId === activeRequestRef.current) {
+          setLoadingCurrentQuestion(false);
+        }
+      });
+  }, [currentQuestionId, loadedQuestions, fetchAndStoreQuestions]);
+
+  useEffect(() => {
+    if (currentQuestion) {
+      setIsBookmarked(bookmarkedQuestions.has(currentQuestion.id));
+      return;
+    }
+
+    setIsBookmarked(false);
   }, [currentQuestion, bookmarkedQuestions]);
 
   const handleNext = useCallback(() => {
     if (autoAdvanceRef.current) { clearTimeout(autoAdvanceRef.current); autoAdvanceRef.current = null; }
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < questionIds.length - 1) {
       setCurrentIndex(currentIndex + 1); setSelectedOption(null); setAnswered(false);
     }
-  }, [currentIndex, questions.length]);
+  }, [currentIndex, questionIds.length]);
 
   const handlePrev = useCallback(() => {
     if (autoAdvanceRef.current) { clearTimeout(autoAdvanceRef.current); autoAdvanceRef.current = null; }
@@ -535,7 +702,8 @@ const QuestionsPage: React.FC = () => {
 
   const filteredTopics = selectedSubject !== "all" ? topics.filter((t) => t.subject_id === selectedSubject) : topics;
   const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name || "";
-  const progressPercent = questions.length > 0 ? ((currentIndex + 1) / questions.length) * 100 : 0;
+  const progressPercent = questionIds.length > 0 ? ((currentIndex + 1) / questionIds.length) * 100 : 0;
+  const totalQuestions = questionIds.length;
   const activeFilterCount = [selectedSubject, selectedTopic, selectedDifficulty, selectedStatus].filter((v) => v !== "all").length;
   const currentQuestionOptions = currentQuestion
     ? [...currentQuestion.question_options].sort((a, b) => a.letter.localeCompare(b.letter))
@@ -635,7 +803,7 @@ const QuestionsPage: React.FC = () => {
             <div>
               <div className="flex justify-between text-xs mb-1.5">
                 <span className="text-muted-foreground font-medium">Progresso</span>
-                <span className="font-bold text-foreground">{currentIndex + 1}/{questions.length}</span>
+                <span className="font-bold text-foreground">{currentIndex + 1}/{totalQuestions}</span>
               </div>
               <Progress value={progressPercent} className="h-2" />
             </div>
@@ -675,7 +843,7 @@ const QuestionsPage: React.FC = () => {
           )}
         </div>
 
-        {answered && currentIndex < questions.length - 1 && (
+        {answered && currentIndex < totalQuestions - 1 && (
           <Button className="w-full gap-2 h-11" onClick={handleNext}>
             Próxima questão <ArrowRight className="w-4 h-4" />
           </Button>
@@ -706,9 +874,9 @@ const QuestionsPage: React.FC = () => {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-extrabold text-foreground font-display">Questões</h1>
-          {questions.length > 0 && !showMateriaSelector && (
+          {totalQuestions > 0 && !showMateriaSelector && (
             <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-              {questions.length} questões
+              {totalQuestions} questões
               {selectedSubject !== "all" && (
                 <span className="ml-1 text-primary font-bold">
                   · {subjectName(selectedSubject)}
@@ -770,7 +938,7 @@ const QuestionsPage: React.FC = () => {
       {/* Conteúdo principal */}
       {!showMateriaSelector && (
         <>
-          {questions.length === 0 ? (
+          {totalQuestions === 0 ? (
             <EmptyState
               icon={BookOpen}
               title="Nenhuma questão encontrada"
@@ -797,6 +965,8 @@ const QuestionsPage: React.FC = () => {
                 </Button>
               </div>
             </div>
+          ) : !currentQuestion ? (
+            <QuestionCardSkeleton />
           ) : currentQuestion ? (
             <div className="flex gap-8">
               {/* Main */}
@@ -804,7 +974,7 @@ const QuestionsPage: React.FC = () => {
                 {/* Progress */}
                 <div className="mb-6">
                   <div className="flex items-center justify-between text-xs mb-2">
-                    <span className="font-bold text-foreground">Questão {currentIndex + 1} de {questions.length}</span>
+                    <span className="font-bold text-foreground">Questão {currentIndex + 1} de {totalQuestions}</span>
                     <span className="font-semibold text-muted-foreground">{Math.round(progressPercent)}%</span>
                   </div>
                   <Progress value={progressPercent} className="h-2" />
@@ -998,7 +1168,7 @@ const QuestionsPage: React.FC = () => {
                           {isBookmarked ? <BookmarkCheck className="w-4 h-4 mr-1.5" /> : <Bookmark className="w-4 h-4 mr-1.5" />}
                           {isBookmarked ? "Favoritada" : "Rever depois"}
                         </Button>
-                        {currentIndex < questions.length - 1 ? (
+                        {currentIndex < totalQuestions - 1 ? (
                           <Button size="sm" onClick={handleNext} className="flex-1 h-11 xl:hidden">
                             Próxima questão <ArrowRight className="w-4 h-4 ml-1.5" />
                           </Button>
@@ -1016,7 +1186,7 @@ const QuestionsPage: React.FC = () => {
                   <Button variant="ghost" size="sm" onClick={handlePrev} disabled={currentIndex === 0}>
                     <ArrowLeft className="w-4 h-4 mr-1" /> Anterior
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={handleNext} disabled={currentIndex >= questions.length - 1}>
+                  <Button variant="ghost" size="sm" onClick={handleNext} disabled={currentIndex >= totalQuestions - 1}>
                     Próxima <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
