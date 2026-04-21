@@ -62,6 +62,23 @@ type QuestionFilters = {
   difficulty?: "facil" | "medio" | "dificil";
 };
 
+const DEFAULT_SESSION_FILTERS: SessionData["filters"] = {
+  subject: "all",
+  topic: "all",
+  difficulty: "all",
+  status: "all",
+};
+
+function areSessionFiltersEqual(
+  left: SessionData["filters"],
+  right: SessionData["filters"],
+) {
+  return left.subject === right.subject
+    && left.topic === right.topic
+    && left.difficulty === right.difficulty
+    && left.status === right.status;
+}
+
 function buildPublishedQuestionsQuery(selectClause: string, filters?: QuestionFilters) {
   let query = supabase
     .from("questions")
@@ -289,6 +306,7 @@ const QuestionsPage: React.FC = () => {
   const [attemptedQuestions, setAttemptedQuestions] = useState<Set<string>>(new Set());
   const [incorrectQuestions, setIncorrectQuestions] = useState<Set<string>>(new Set());
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState<Set<string>>(new Set());
+  const [progressLoaded, setProgressLoaded] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [restoringSession, setRestoringSession] = useState(true);
@@ -296,10 +314,10 @@ const QuestionsPage: React.FC = () => {
 
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sessionInitialized = useRef(false);
   const activeRequestRef = useRef(0);
   const loadedQuestionsRef = useRef<Record<string, QuestionWithOptions>>({});
   const inFlightQuestionIdsRef = useRef<Set<string>>(new Set());
+  const restoredSessionRef = useRef<SessionData | null>(null);
 
   useEffect(() => {
     return () => {
@@ -374,20 +392,30 @@ const QuestionsPage: React.FC = () => {
 
   // Fetch user progress
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setProgressLoaded(false);
+      return;
+    }
+
     const fetchUserData = async () => {
-      const [attRes, bkRes] = await Promise.all([
-        supabase.from("question_attempts").select("question_id, is_correct").eq("user_id", user.id),
-        supabase.from("bookmarks").select("question_id").eq("user_id", user.id),
-      ]);
-      if (attRes.data) {
-        setAttemptedQuestions(new Set(attRes.data.map((a) => a.question_id)));
-        setIncorrectQuestions(new Set(attRes.data.filter((a) => !a.is_correct).map((a) => a.question_id)));
-      }
-      if (bkRes.data) {
-        setBookmarkedQuestions(new Set(bkRes.data.map((b) => b.question_id)));
+      try {
+        const [attRes, bkRes] = await Promise.all([
+          supabase.from("question_attempts").select("question_id, is_correct").eq("user_id", user.id),
+          supabase.from("bookmarks").select("question_id").eq("user_id", user.id),
+        ]);
+        if (attRes.data) {
+          setAttemptedQuestions(new Set(attRes.data.map((a) => a.question_id)));
+          setIncorrectQuestions(new Set(attRes.data.filter((a) => !a.is_correct).map((a) => a.question_id)));
+        }
+        if (bkRes.data) {
+          setBookmarkedQuestions(new Set(bkRes.data.map((b) => b.question_id)));
+        }
+      } finally {
+        setProgressLoaded(true);
       }
     };
+
+    setProgressLoaded(false);
     fetchUserData();
   }, [user]);
 
@@ -395,12 +423,11 @@ const QuestionsPage: React.FC = () => {
   useEffect(() => {
     if (!user) {
       setRestoringSession(false);
+      restoredSessionRef.current = null;
       return;
     }
 
     const restore = async () => {
-      const requestId = ++activeRequestRef.current;
-
       try {
         const { data } = await supabase
           .from("study_sessions")
@@ -416,14 +443,16 @@ const QuestionsPage: React.FC = () => {
             currentIndex: data.current_index,
             sessionCorrect: data.session_correct,
             sessionTotal: data.session_total,
-            filters: (data.filters as SessionData["filters"]) || { subject: "all", topic: "all", difficulty: "all", status: "all" },
+            filters: (data.filters as SessionData["filters"]) || DEFAULT_SESSION_FILTERS,
             updatedAt: data.updated_at,
           };
         }
 
         if (!session) session = loadSessionLocal(user.id);
 
-        if (session && session.questionIds.length > 0) {
+        restoredSessionRef.current = session;
+
+        if (session) {
           setSelectedSubject(session.filters.subject || "all");
           setSelectedTopic(session.filters.topic || "all");
           setSelectedDifficulty(session.filters.difficulty || "all");
@@ -434,57 +463,36 @@ const QuestionsPage: React.FC = () => {
           setSelectedOption(null);
           setAnswered(false);
           setShowMateriaSelector(false);
-          sessionInitialized.current = true;
-
-          const restoredIndex = Math.min(session.currentIndex, session.questionIds.length - 1);
-          const currentQuestionId = session.questionIds[restoredIndex];
-
-          setQuestionIds(session.questionIds);
-          setLoadedQuestions({});
-          loadedQuestionsRef.current = {};
-          inFlightQuestionIdsRef.current.clear();
-          setCurrentIndex(restoredIndex);
-
-          if (currentQuestionId) {
-            setLoadingCurrentQuestion(true);
-            await fetchAndStoreQuestions([currentQuestionId], requestId);
-
-            if (requestId !== activeRequestRef.current) return;
-
-            setLoading(false);
-            setRestoringSession(false);
-            setLoadingCurrentQuestion(false);
-
-            void prefetchQuestions(
-              session.questionIds.filter((id) => id !== currentQuestionId),
-              requestId,
-            ).catch((error) => {
-              console.error("Failed to prefetch restored questions:", error);
-            });
-            return;
-          }
         }
       } catch (e) {
         console.error("Failed to restore session:", e);
       }
 
-      sessionInitialized.current = false;
       setRestoringSession(false);
     };
 
     restore();
-  }, [user, fetchAndStoreQuestions, prefetchQuestions]);
+  }, [user]);
 
   // Fetch questions when filters change
   useEffect(() => {
-    if (restoringSession) return;
-    if (sessionInitialized.current) {
-      sessionInitialized.current = false;
-      return;
-    }
+    if (restoringSession || !progressLoaded) return;
 
     const fetchQuestions = async () => {
       const requestId = ++activeRequestRef.current;
+      const currentFilters: SessionData["filters"] = {
+        subject: selectedSubject,
+        topic: selectedTopic,
+        difficulty: selectedDifficulty,
+        status: selectedStatus,
+      };
+      const restoredSession = restoredSessionRef.current;
+      const canReuseRestoredSession = restoredSession !== null
+        && areSessionFiltersEqual(restoredSession.filters, currentFilters);
+
+      if (!canReuseRestoredSession) {
+        restoredSessionRef.current = null;
+      }
 
       setLoading(true);
       setLoadingCurrentQuestion(false);
@@ -495,10 +503,11 @@ const QuestionsPage: React.FC = () => {
       setCurrentIndex(0);
       setSelectedOption(null);
       setAnswered(false);
-      setSessionCorrect(0);
-      setSessionTotal(0);
+      setSessionCorrect(canReuseRestoredSession ? restoredSession.sessionCorrect : 0);
+      setSessionTotal(canReuseRestoredSession ? restoredSession.sessionTotal : 0);
       setSessionFinished(false);
       setShowMateriaSelector(false);
+
       try {
         const allQuestionIds = await fetchAllPublishedQuestionIds({
           subjectId: selectedSubject !== "all" ? selectedSubject : undefined,
@@ -522,14 +531,41 @@ const QuestionsPage: React.FC = () => {
         if (requestId !== activeRequestRef.current) return;
 
         setQuestionIds(filteredQuestionIds);
+        restoredSessionRef.current = null;
 
         if (filteredQuestionIds.length === 0) {
           setLoading(false);
           return;
         }
 
+        let initialIndex = 0;
+        let initialCorrect = 0;
+        let initialTotal = 0;
+
+        if (canReuseRestoredSession) {
+          initialCorrect = restoredSession.sessionCorrect;
+          initialTotal = restoredSession.sessionTotal;
+
+          const restoredQuestionId = restoredSession.questionIds[
+            Math.min(restoredSession.currentIndex, restoredSession.questionIds.length - 1)
+          ];
+
+          if (restoredQuestionId) {
+            const matchedIndex = filteredQuestionIds.indexOf(restoredQuestionId);
+            if (matchedIndex >= 0) {
+              initialIndex = matchedIndex;
+            } else {
+              initialIndex = Math.min(restoredSession.currentIndex, filteredQuestionIds.length - 1);
+            }
+          }
+        }
+
+        setCurrentIndex(initialIndex);
+        setSessionCorrect(initialCorrect);
+        setSessionTotal(initialTotal);
+
         setLoadingCurrentQuestion(true);
-        await fetchAndStoreQuestions([filteredQuestionIds[0]], requestId);
+        await fetchAndStoreQuestions([filteredQuestionIds[initialIndex]], requestId);
 
         if (requestId !== activeRequestRef.current) return;
 
@@ -537,10 +573,13 @@ const QuestionsPage: React.FC = () => {
         setLoadingCurrentQuestion(false);
 
         if (user) {
-          persistSession(filteredQuestionIds, 0, 0, 0);
+          persistSession(filteredQuestionIds, initialIndex, initialCorrect, initialTotal);
         }
 
-        void prefetchQuestions(filteredQuestionIds.slice(1), requestId).catch((error) => {
+        void prefetchQuestions(
+          filteredQuestionIds.filter((_, index) => index !== initialIndex),
+          requestId,
+        ).catch((error) => {
           console.error("Failed to prefetch questions:", error);
         });
       } catch (error) {
@@ -555,7 +594,7 @@ const QuestionsPage: React.FC = () => {
     };
     fetchQuestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSubject, selectedTopic, selectedDifficulty, selectedStatus, restoringSession]);
+  }, [selectedSubject, selectedTopic, selectedDifficulty, selectedStatus, restoringSession, progressLoaded]);
 
   const persistSession = useCallback((
     questionIds: string[],
