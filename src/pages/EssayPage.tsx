@@ -66,6 +66,71 @@ const COMPETENCIAS: Record<string, string> = {
 
 const LOCAL_KEY = (userId: string) => `essay_draft_${userId}`;
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function normalizeEssayCorrection(data: unknown): EssayCorrection {
+  const payload = typeof data === "object" && data !== null ? data as Record<string, unknown> : {};
+  const notas =
+    typeof payload.notas_por_criterio === "object" && payload.notas_por_criterio !== null
+      ? payload.notas_por_criterio as Record<string, number>
+      : {};
+
+  const erros = Array.isArray(payload.erros_gramaticais)
+    ? payload.erros_gramaticais
+        .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+        .map((item) => ({
+          trecho: typeof item.trecho === "string" ? item.trecho : "",
+          erro: typeof item.erro === "string" ? item.erro : "",
+          correcao: typeof item.correcao === "string" ? item.correcao : "",
+        }))
+        .filter((item) => item.trecho || item.erro || item.correcao)
+    : [];
+
+  const trechos = Array.isArray(payload.trechos_reescrever)
+    ? payload.trechos_reescrever
+        .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+        .map((item) => ({
+          original: typeof item.original === "string" ? item.original : "",
+          sugestao: typeof item.sugestao === "string" ? item.sugestao : "",
+        }))
+        .filter((item) => item.original || item.sugestao)
+    : [];
+
+  return {
+    nota_geral: typeof payload.nota_geral === "number" ? payload.nota_geral : 0,
+    notas_por_criterio: notas,
+    feedback_geral: typeof payload.feedback_geral === "string" ? payload.feedback_geral : "",
+    pontos_fortes: normalizeStringArray(payload.pontos_fortes),
+    pontos_fracos: normalizeStringArray(payload.pontos_fracos),
+    erros_gramaticais: erros,
+    sugestoes_melhoria: normalizeStringArray(payload.sugestoes_melhoria),
+    trechos_reescrever: trechos,
+  };
+}
+
+function getCorrectionErrorMessage(error: unknown) {
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    if (/Failed to send a request to the Edge Function/i.test(error.message)) {
+      return "Nao foi possivel alcancar o servico de correcao. Tentamos a rota alternativa, mas ela tambem falhou.";
+    }
+
+    if (/Relay Error/i.test(error.message)) {
+      return "A plataforma de funcoes do Supabase falhou ao encaminhar a correcao. Tente novamente em instantes.";
+    }
+
+    if (/non-2xx/i.test(error.message)) {
+      return "A funcao de correcao respondeu com erro. Revise a configuracao da Edge Function.";
+    }
+
+    return error.message;
+  }
+
+  return "Erro ao corrigir redacao.";
+}
+
 // ── Utility: generate PDF ──
 function generatePDF(essay: Essay) {
   const doc = new jsPDF();
@@ -249,6 +314,64 @@ const EssayPage: React.FC = () => {
     if (view === "history") fetchHistory();
   }, [view, fetchHistory]);
 
+  const requestCorrection = useCallback(async () => {
+    const payload = { tema, titulo, conteudo };
+    const { data, error } = await supabase.functions.invoke("correct-essay", {
+      body: payload,
+    });
+
+    if (!error) {
+      return data;
+    }
+
+    const shouldFallback =
+      /Failed to send a request to the Edge Function/i.test(error.message) ||
+      /Relay Error/i.test(error.message);
+
+    if (!shouldFallback) {
+      throw error;
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/correct-essay`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    let parsedBody: unknown = null;
+
+    if (responseText) {
+      try {
+        parsedBody = JSON.parse(responseText);
+      } catch {
+        parsedBody = { error: responseText };
+      }
+    }
+
+    if (!response.ok) {
+      const message =
+        parsedBody &&
+        typeof parsedBody === "object" &&
+        "error" in parsedBody &&
+        typeof parsedBody.error === "string"
+          ? parsedBody.error
+          : `Erro ${response.status} ao corrigir redacao.`;
+
+      throw new Error(message);
+    }
+
+    return parsedBody;
+  }, [conteudo, tema, titulo]);
+
   const saveDraft = async () => {
     if (!user) return;
     setSaving(true);
@@ -282,27 +405,32 @@ const EssayPage: React.FC = () => {
     try {
       let essayId = currentEssay?.id;
       if (!essayId) {
-        const { data } = await supabase.from("essays").insert({
+        const { data, error: insertError } = await supabase.from("essays").insert({
           user_id: user.id, tema, titulo, conteudo, status: "enviada" as const,
         }).select().single();
+        if (insertError) throw insertError;
         essayId = data?.id;
         if (data) setCurrentEssay(data as Essay);
       } else {
-        await supabase.from("essays").update({
+        const { error: updateDraftError } = await supabase.from("essays").update({
           tema, titulo, conteudo, status: "enviada" as const, updated_at: new Date().toISOString(),
         }).eq("id", essayId);
+        if (updateDraftError) throw updateDraftError;
       }
 
-      const { data: correctionData, error } = await supabase.functions.invoke("correct-essay", {
-        body: { tema, titulo, conteudo },
-      });
+      const correctionData = await requestCorrection();
+      if (
+        correctionData &&
+        typeof correctionData === "object" &&
+        "error" in correctionData &&
+        typeof correctionData.error === "string"
+      ) {
+        throw new Error(correctionData.error);
+      }
 
-      if (error) throw error;
-      if (correctionData?.error) throw new Error(correctionData.error);
+      const correction = normalizeEssayCorrection(correctionData);
 
-      const correction = correctionData as EssayCorrection;
-
-      const { data: updated } = await supabase.from("essays").update({
+      const { data: updated, error: updateCorrectionError } = await supabase.from("essays").update({
         status: "corrigida" as const,
         nota_geral: correction.nota_geral,
         notas_por_criterio: correction.notas_por_criterio,
@@ -316,6 +444,7 @@ const EssayPage: React.FC = () => {
         sugestoes_melhoria: correction.sugestoes_melhoria,
         updated_at: new Date().toISOString(),
       }).eq("id", essayId).select().single();
+      if (updateCorrectionError) throw updateCorrectionError;
 
       if (updated) {
         setCurrentEssay(updated as Essay);
@@ -324,7 +453,7 @@ const EssayPage: React.FC = () => {
         toast.success("Correção concluída!");
       }
     } catch (err: any) {
-      toast.error(err?.message || "Erro ao corrigir redação.");
+      toast.error(getCorrectionErrorMessage(err));
     }
     setCorrecting(false);
   };
