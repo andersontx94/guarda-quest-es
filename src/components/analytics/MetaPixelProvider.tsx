@@ -1,16 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { initializeMetaPixel, trackMetaPageView } from "@/lib/metaPixel";
+import { trackPageView } from "@/lib/facebookPixel";
 
 const MetaPixelProvider: React.FC = () => {
   const location = useLocation();
+  const hasTrackedInitialRouteRef = useRef(false);
 
   useEffect(() => {
-    initializeMetaPixel();
-  }, []);
+    if (!hasTrackedInitialRouteRef.current) {
+      hasTrackedInitialRouteRef.current = true;
+      return;
+    }
 
-  useEffect(() => {
-    trackMetaPageView();
+    trackPageView();
   }, [location.pathname, location.search, location.hash]);
 
   return null;

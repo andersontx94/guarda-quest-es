@@ -1,6 +1,6 @@
 import React from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
-import { trackMetaInitiateCheckout } from "@/lib/metaPixel";
+import { trackInitiateCheckout } from "@/lib/facebookPixel";
 
 interface CheckoutButtonProps extends Omit<ButtonProps, "onClick"> {
   checkoutUrl: string;
@@ -28,9 +28,7 @@ const CheckoutButton = React.forwardRef<HTMLButtonElement, CheckoutButtonProps>(
         return;
       }
 
-      if (typeof window.fbq === "function") {
-        trackMetaInitiateCheckout(eventData);
-      }
+      trackInitiateCheckout(eventData);
 
       if (newTab) {
         const openedWindow = window.open(checkoutUrl, "_blank", "noopener,noreferrer");
