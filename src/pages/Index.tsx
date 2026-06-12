@@ -7,7 +7,7 @@ import {
   Lock, Zap, ChevronDown, ChevronUp, Medal, Star,
 } from "lucide-react";
 
-// TODO: trocar pelo checkout Hotmart do produto ARACAJU (este é o produto de Manaus)
+// Checkout Hotmart (mesmo produto; descrição/nome atualizados para Aracaju no painel da Hotmart)
 const CHECKOUT_URL = "https://pay.hotmart.com/P105084825B";
 const PROVA_DATA   = new Date("2026-09-13T08:00:00");
 const IMG_HERO    = "/gmm-formacao.webp";
