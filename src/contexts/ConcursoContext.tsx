@@ -71,7 +71,11 @@ export const ConcursoProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .select("concurso_atual")
           .eq("user_id", user.id)
           .single();
-        if (profile?.concurso_atual) resolvedId = profile.concurso_atual;
+        if (profile?.concurso_atual) {
+          const c = concursos.find((x) => x.id === profile.concurso_atual);
+          // Só respeita a preferência salva se o concurso ainda não estiver encerrado
+          if (c && !c.encerrado) resolvedId = profile.concurso_atual;
+        }
       }
 
       if (!resolvedId) {
