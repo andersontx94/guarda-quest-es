@@ -21,58 +21,31 @@ interface Subject {
 type DownloadState = "idle" | "loading" | "done" | "error";
 
 const CORES: Record<string, string> = {
-  "Legislacao Especifica": "#3B82F6",
-  "Lingua Portuguesa": "#8B5CF6",
+  // Manaus
+  "Legislação Específica": "#3B82F6",
+  "Língua Portuguesa": "#8B5CF6",
   "Direito Constitucional": "#EF4444",
   "Direito Penal": "#F59E0B",
   "Direito Processual Penal": "#F97316",
-  "Etica e Direitos Humanos": "#10B981",
-  "Legislacao de Transito": "#06B6D4",
-  "Nocoes de Informatica": "#84CC16",
-  "Geografia e Historia de Manaus": "#EC4899",
-  "Legisla\u00E7\u00E3o Espec\u00EDfica": "#3B82F6",
-  "L\u00EDngua Portuguesa": "#8B5CF6",
-  "\u00C9tica e Direitos Humanos": "#10B981",
-  "Legisla\u00E7\u00E3o de Tr\u00E2nsito": "#06B6D4",
-  "No\u00E7\u00F5es de Inform\u00E1tica": "#84CC16",
-  "Geografia e Hist\u00F3ria de Manaus": "#EC4899",
-  "LegislaÃ§Ã£o EspecÃ­fica": "#3B82F6",
-  "LÃ­ngua Portuguesa": "#8B5CF6",
-  "Ã‰tica e Direitos Humanos": "#10B981",
-  "LegislaÃ§Ã£o de TrÃ¢nsito": "#06B6D4",
-  "NoÃ§Ãµes de InformÃ¡tica": "#84CC16",
-  "Geografia e HistÃ³ria de Manaus": "#EC4899",
-};
-
-const TOTAIS: Record<string, number> = {
-  "Legislacao Especifica": 55,
-  "Lingua Portuguesa": 30,
-  "Direito Constitucional": 40,
-  "Direito Penal": 24,
-  "Direito Processual Penal": 17,
-  "Etica e Direitos Humanos": 14,
-  "Legislacao de Transito": 25,
-  "Nocoes de Informatica": 20,
-  "Geografia e Historia de Manaus": 15,
-  "Legisla\u00E7\u00E3o Espec\u00EDfica": 55,
-  "L\u00EDngua Portuguesa": 30,
-  "\u00C9tica e Direitos Humanos": 14,
-  "Legisla\u00E7\u00E3o de Tr\u00E2nsito": 25,
-  "No\u00E7\u00F5es de Inform\u00E1tica": 20,
-  "Geografia e Hist\u00F3ria de Manaus": 15,
-  "LegislaÃ§Ã£o EspecÃ­fica": 55,
-  "LÃ­ngua Portuguesa": 30,
-  "Ã‰tica e Direitos Humanos": 14,
-  "LegislaÃ§Ã£o de TrÃ¢nsito": 25,
-  "NoÃ§Ãµes de InformÃ¡tica": 20,
-  "Geografia e HistÃ³ria de Manaus": 15,
+  "Ética e Direitos Humanos": "#10B981",
+  "Legislação de Trânsito": "#06B6D4",
+  "Noções de Informática": "#84CC16",
+  "Geografia e História de Manaus": "#EC4899",
+  // Aracaju
+  "Raciocínio Lógico": "#F59E0B",
+  "Atualidades": "#EC4899",
+  "Conhecimentos sobre Aracaju/SE": "#10B981",
+  "Noções de Direito Administrativo": "#06B6D4",
+  "Noções de Direito Constitucional e Direitos Humanos": "#EF4444",
+  "Noções de Direito Penal e Processo Penal": "#F97316",
+  "Legislação Extravagante": "#3B82F6",
 };
 
 const buildFallbackFileName = (subjectName: string, extension: "pdf" | "html") =>
   `material-${subjectName
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")}.${extension}`;
 
@@ -155,20 +128,40 @@ const renderLoadingPreview = (previewTab: Window, subjectName: string) => {
 const MateriaisPage: React.FC = () => {
   const { concursoId, concursoAtual } = useConcurso();
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [countMap, setCountMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [states, setStates] = useState<Record<string, DownloadState>>({});
 
   useEffect(() => {
     if (!concursoId) return;
-    supabase
-      .from("subjects")
-      .select("id, name, order_num")
-      .eq("concurso_id", concursoId)
-      .order("order_num")
-      .then(({ data }) => {
-        if (data) setSubjects(data);
-        setLoading(false);
-      });
+
+    const load = async () => {
+      const [subjectsRes, questionsRes] = await Promise.all([
+        supabase
+          .from("subjects")
+          .select("id, name, order_num")
+          .eq("concurso_id", concursoId)
+          .order("order_num"),
+        supabase
+          .from("questions")
+          .select("subject_id")
+          .eq("concurso_id", concursoId),
+      ]);
+
+      if (subjectsRes.data) setSubjects(subjectsRes.data);
+
+      if (questionsRes.data) {
+        const map: Record<string, number> = {};
+        for (const q of questionsRes.data) {
+          map[q.subject_id] = (map[q.subject_id] ?? 0) + 1;
+        }
+        setCountMap(map);
+      }
+
+      setLoading(false);
+    };
+
+    load();
   }, [concursoId]);
 
   const setState = (id: string, state: DownloadState) =>
@@ -250,6 +243,8 @@ const MateriaisPage: React.FC = () => {
     );
   }
 
+  const maxCount = Math.max(...Object.values(countMap), 1);
+
   return (
     <div className="page-container animate-slide-up max-w-3xl mx-auto">
       <div className="mb-8">
@@ -279,8 +274,8 @@ const MateriaisPage: React.FC = () => {
 
       <div className="space-y-3">
         {subjects.map((subject) => {
-          const cor = CORES[subject.name] || "#3B82F6";
-          const total = TOTAIS[subject.name] || 0;
+          const cor = CORES[subject.name] ?? "#3B82F6";
+          const total = countMap[subject.id] ?? 0;
           const state = states[subject.id] || "idle";
 
           return (
@@ -295,7 +290,7 @@ const MateriaisPage: React.FC = () => {
                 <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden max-w-[180px]">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${(total / 55) * 100}%`, backgroundColor: cor }}
+                    style={{ width: `${(total / maxCount) * 100}%`, backgroundColor: cor }}
                   />
                 </div>
               </div>
