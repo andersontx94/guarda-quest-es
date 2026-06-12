@@ -10,9 +10,9 @@ import {
 // Checkout Hotmart (mesmo produto; descrição/nome atualizados para Aracaju no painel da Hotmart)
 const CHECKOUT_URL = "https://pay.hotmart.com/P105084825B";
 const PROVA_DATA   = new Date("2026-09-13T08:00:00");
-const IMG_HERO    = "/gmm-formacao.webp";
-const IMG_MEIO    = "/gmm-guardas.jpg";
-const IMG_VIATURA = "/gmm-viatura.jpg";
+const IMG_HERO    = "/gmm-formacao.webp"; // foto discreta (fundo escurecido), sem identificar município
+const IMG_MEIO    = "/guarda-aracaju.jpg";
+const IMG_VIATURA = "/guarda-aracaju-2.jpg";
 
 // ── Contador ──────────────────────────────────────────
 function useCountdown(target: Date) {
