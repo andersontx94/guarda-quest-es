@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Subject, Topic } from "@/types/database";
@@ -7,6 +8,7 @@ import { Plus, Pencil, Trash2, X, Check } from "lucide-react";
 import { toast } from "sonner";
 
 const AdminSubjects: React.FC = () => {
+  const { concursoId, concursoAtual } = useConcurso();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [newSubject, setNewSubject] = useState("");
@@ -16,19 +18,20 @@ const AdminSubjects: React.FC = () => {
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null);
 
   const fetchData = async () => {
+    if (!concursoId) return;
     const [sRes, tRes] = await Promise.all([
-      supabase.from("subjects").select("*").order("order_num"),
+      supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num"),
       supabase.from("topics").select("*"),
     ]);
     if (sRes.data) setSubjects(sRes.data);
     if (tRes.data) setTopics(tRes.data);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [concursoId]);
 
   const addSubject = async () => {
-    if (!newSubject.trim()) return;
-    const { error } = await supabase.from("subjects").insert({ name: newSubject.trim(), order_num: subjects.length });
+    if (!newSubject.trim() || !concursoId) return;
+    const { error } = await supabase.from("subjects").insert({ name: newSubject.trim(), order_num: subjects.length, concurso_id: concursoId });
     if (error) { toast.error("Erro ao criar matéria"); return; }
     setNewSubject("");
     toast.success("Matéria criada");
@@ -69,7 +72,10 @@ const AdminSubjects: React.FC = () => {
 
   return (
     <div className="animate-slide-up">
-      <h1 className="text-xl font-bold text-foreground mb-6">Matérias e Assuntos</h1>
+      <h1 className="text-xl font-bold text-foreground mb-1">Matérias e Assuntos</h1>
+      <p className="text-xs text-muted-foreground mb-6">
+        Concurso: <span className="font-semibold text-foreground">{concursoAtual?.nome ?? "—"}</span>
+      </p>
 
       {/* Add Subject */}
       <div className="flex gap-2 mb-6">

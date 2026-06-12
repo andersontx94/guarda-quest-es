@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Link } from "react-router-dom";
 import { XCircle, ArrowRight } from "lucide-react";
 import { Subject } from "@/types/database";
@@ -16,20 +17,22 @@ interface ErrorQuestion {
 
 const ErrorsPage: React.FC = () => {
   const { user } = useAuth();
+  const { concursoId } = useConcurso();
   const [questions, setQuestions] = useState<ErrorQuestion[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !concursoId) return;
     const fetch = async () => {
       const [attRes, subRes] = await Promise.all([
         supabase
           .from("question_attempts")
-          .select("question_id, is_correct, questions(id, enunciado, subject_id)")
+          .select("question_id, is_correct, questions!inner(id, enunciado, subject_id, concurso_id)")
           .eq("user_id", user.id)
-          .eq("is_correct", false),
-        supabase.from("subjects").select("*").order("order_num"),
+          .eq("is_correct", false)
+          .eq("questions.concurso_id", concursoId),
+        supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num"),
       ]);
 
       if (attRes.data) {
@@ -45,7 +48,7 @@ const ErrorsPage: React.FC = () => {
       setLoading(false);
     };
     fetch();
-  }, [user]);
+  }, [user, concursoId]);
 
   const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name || "";
 

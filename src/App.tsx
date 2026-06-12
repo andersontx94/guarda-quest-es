@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ConcursoProvider } from "@/contexts/ConcursoContext";
 import { AppLayout } from "@/components/AppLayout";
 
 import Index from "./pages/Index";
@@ -74,6 +75,7 @@ const App = () => (
       <BrowserRouter>
         <MetaPixelProvider />
         <AuthProvider>
+          <ConcursoProvider>
           <AuthRedirectHandler />
           <CookieBanner />
           <Routes>
@@ -116,6 +118,7 @@ const App = () => (
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ConcursoProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

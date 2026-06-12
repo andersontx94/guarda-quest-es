@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Subject } from "@/types/database";
 import { BarChart3, BookOpen, Target, XCircle, TrendingUp } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +18,7 @@ interface SubjectPerformance {
 
 const PerformancePage: React.FC = () => {
   const { user } = useAuth();
+  const { concursoId } = useConcurso();
   const [total, setTotal] = useState(0);
   const [correct, setCorrect] = useState(0);
   const [incorrect, setIncorrect] = useState(0);
@@ -24,14 +26,15 @@ const PerformancePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !concursoId) return;
     const fetchData = async () => {
       const [attRes, subRes] = await Promise.all([
         supabase
           .from("question_attempts")
-          .select("is_correct, question_id, questions(subject_id)")
-          .eq("user_id", user.id),
-        supabase.from("subjects").select("*").order("order_num"),
+          .select("is_correct, question_id, questions!inner(subject_id, concurso_id)")
+          .eq("user_id", user.id)
+          .eq("questions.concurso_id", concursoId),
+        supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num"),
       ]);
 
       if (attRes.data) {
@@ -67,7 +70,7 @@ const PerformancePage: React.FC = () => {
       setLoading(false);
     };
     fetchData();
-  }, [user]);
+  }, [user, concursoId]);
 
   const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
 

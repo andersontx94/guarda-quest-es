@@ -7,8 +7,9 @@ import {
   Lock, Zap, ChevronDown, ChevronUp, Medal, Star,
 } from "lucide-react";
 
+// TODO: trocar pelo checkout Hotmart do produto ARACAJU (este é o produto de Manaus)
 const CHECKOUT_URL = "https://pay.hotmart.com/P105084825B";
-const PROVA_DATA   = new Date("2026-05-24T08:00:00");
+const PROVA_DATA   = new Date("2026-09-13T08:00:00");
 const IMG_HERO    = "/gmm-formacao.webp";
 const IMG_MEIO    = "/gmm-guardas.jpg";
 const IMG_VIATURA = "/gmm-viatura.jpg";
@@ -67,22 +68,22 @@ const CountBox: React.FC<{ valor: number; label: string }> = ({ valor, label }) 
 
 // ── Matérias ──────────────────────────────────────────
 const materias = [
-  { nome: "Legislação Específica",          q: 15, pts: 30,  cor: "#3B82F6" },
-  { nome: "Língua Portuguesa",              q: 10, pts: 15,  cor: "#8B5CF6" },
-  { nome: "Direito Constitucional",         q: 5,  pts: 10,  cor: "#EF4444" },
-  { nome: "Direito Penal",                  q: 5,  pts: 7.5, cor: "#F59E0B" },
-  { nome: "Dir. Processual Penal",          q: 5,  pts: 7.5, cor: "#F97316" },
-  { nome: "Ética e Direitos Humanos",       q: 5,  pts: 7.5, cor: "#10B981" },
-  { nome: "Legislação de Trânsito",         q: 5,  pts: 7.5, cor: "#06B6D4" },
-  { nome: "Noções de Informática",          q: 5,  pts: 7.5, cor: "#84CC16" },
-  { nome: "Geografia e História de Manaus", q: 5,  pts: 7.5, cor: "#EC4899" },
+  { nome: "Língua Portuguesa",                    q: 10, pts: 20, cor: "#8B5CF6" },
+  { nome: "Direito Administrativo",               q: 10, pts: 15, cor: "#3B82F6" },
+  { nome: "Direito Constitucional e Dir. Humanos", q: 10, pts: 15, cor: "#EF4444" },
+  { nome: "Direito Penal e Processo Penal",       q: 10, pts: 15, cor: "#F59E0B" },
+  { nome: "Legislação Extravagante",              q: 10, pts: 15, cor: "#F97316" },
+  { nome: "Raciocínio Lógico",                    q: 9,  pts: 9,  cor: "#10B981" },
+  { nome: "Noções de Informática",                q: 7,  pts: 7,  cor: "#06B6D4" },
+  { nome: "Atualidades",                          q: 7,  pts: 7,  cor: "#84CC16" },
+  { nome: "Conhecimentos sobre Aracaju/SE",       q: 7,  pts: 7,  cor: "#EC4899" },
 ];
 
 // ── FAQ ───────────────────────────────────────────────
 const faqs = [
   {
-    q: "As questões realmente seguem o edital da GCM Manaus 2026?",
-    a: "Sim. Cada questão foi elaborada com base no edital oficial da Consulplan, cobrindo as 9 matérias na proporção exata da prova. Nada genérico.",
+    q: "As questões realmente seguem o edital da Guarda Municipal de Aracaju 2026?",
+    a: "Sim. Cada questão foi elaborada com base no edital oficial da IDECAN, cobrindo as 9 matérias na proporção exata da prova. Nada genérico.",
   },
   {
     q: "Funciona no celular?",
@@ -90,7 +91,7 @@ const faqs = [
   },
   {
     q: "Como sei se estou no caminho certo para a aprovação?",
-    a: "Nosso simulado calcula sua nota ponderada real e mostra exatamente o quanto você precisa melhorar. A nota de corte é 60 pontos.",
+    a: "Nosso simulado calcula sua nota ponderada real e mostra exatamente o quanto você precisa melhorar. A nota de corte é 55 pontos (50% dos 110 pontos), e zerar qualquer disciplina elimina o candidato.",
   },
   {
     q: "O ranking é obrigatório?",
@@ -102,7 +103,7 @@ const faqs = [
   },
   {
     q: "Até quando tenho acesso?",
-    a: "Até o dia da prova, 24 de maio de 2026. Novas questões chegam automaticamente, sem custo extra.",
+    a: "Até o dia da prova, 13 de setembro de 2026. Novas questões chegam automaticamente, sem custo extra.",
   },
 ];
 
@@ -135,7 +136,7 @@ const Index: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-black text-foreground">GuardaQuest</p>
-              <p className="text-[10px] text-muted-foreground font-medium">GCM Manaus 2026</p>
+              <p className="text-[10px] text-muted-foreground font-medium">Guarda Municipal de Aracaju 2026</p>
             </div>
           </Link>
           <div className="flex items-center gap-2">
@@ -211,7 +212,7 @@ const Index: React.FC = () => {
                   color: "rgba(255,255,255,0.75)",
                   textTransform: "uppercase", letterSpacing: "0.16em",
                 }}>
-                  Concurso GCM Manaus 2026 · Consulplan · 590 vagas
+                  Concurso Guarda Municipal de Aracaju 2026 · IDECAN · 100 vagas
                 </span>
               </div>
 
@@ -231,7 +232,7 @@ const Index: React.FC = () => {
                   display: "block",
                   textShadow: "0 2px 20px rgba(0,0,0,0.9), 0 0 30px rgba(251,191,36,0.2)",
                 }}>
-                  Guarda Municipal de Manaus
+                  Guarda Municipal de Aracaju
                 </span>
                 <span style={{ color: "#ffffff", display: "block" }}>com quem conhece o edital.</span>
               </h1>
@@ -247,8 +248,8 @@ const Index: React.FC = () => {
               }}>
                 Mais de{" "}
                 <strong style={{ color: "#ffffff", fontWeight: 800 }}>500 questões comentadas</strong>,
-                {" "}simulados cronometrados e ranking entre candidatos. Tudo baseado no edital oficial da Consulplan para a prova de{" "}
-                <strong style={{ color: "#FBBF24", fontWeight: 800 }}>24 de maio de 2026</strong>.
+                {" "}simulados cronometrados e ranking entre candidatos. Tudo baseado no edital oficial da IDECAN para a prova de{" "}
+                <strong style={{ color: "#FBBF24", fontWeight: 800 }}>13 de setembro de 2026</strong>.
               </p>
 
               {/* Badge preço promocional */}
@@ -331,7 +332,7 @@ const Index: React.FC = () => {
                   ⚡ Tempo até a prova
                 </p>
                 <p style={{ color: "rgba(255,255,255,0.45)", fontSize: "11px", marginTop: "4px" }}>
-                  24 de maio de 2026 · Manaus/AM
+                  13 de setembro de 2026 · Aracaju/SE
                 </p>
               </div>
 
@@ -363,11 +364,11 @@ const Index: React.FC = () => {
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-6 text-center">
               {[
-                { v: "590",     l: "vagas",        s: "maior concurso da GMM" },
-                { v: "60q",     l: "na prova",      s: "questões objetivas" },
-                { v: "100pts",  l: "nota máxima",   s: "prova ponderada" },
-                { v: "60pts",   l: "nota de corte", s: "mínimo para passar" },
-                { v: "R$3.060", l: "salário base",  s: "+ benefícios" },
+                { v: "100",       l: "vagas",        s: "+ cadastro reserva" },
+                { v: "80q",       l: "na prova",      s: "questões objetivas" },
+                { v: "110pts",    l: "nota máxima",   s: "prova ponderada" },
+                { v: "55pts",     l: "nota de corte", s: "mínimo para passar" },
+                { v: "R$4.055",   l: "salário base",  s: "+ benefícios" },
               ].map(item => (
                 <div key={item.l}>
                   <p className="text-2xl sm:text-3xl font-black text-primary font-display">{item.v}</p>
@@ -384,7 +385,7 @@ const Index: React.FC = () => {
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div className="relative rounded-3xl overflow-hidden shadow-2xl group">
-                <img src={IMG_MEIO} alt="Guardas Municipais de Manaus"
+                <img src={IMG_MEIO} alt="Guardas Municipais de Aracaju"
                   className="w-full h-72 sm:h-[420px] object-cover object-top group-hover:scale-105 transition-transform duration-700" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#010a1e]/90 via-[#010a1e]/10 to-transparent" />
                 <div className="absolute bottom-5 left-5 right-5">
@@ -393,8 +394,8 @@ const Index: React.FC = () => {
                       <Shield className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <p className="text-white font-bold text-sm">Guarda Municipal de Manaus</p>
-                      <p className="text-white/60 text-xs mt-0.5">590 vagas · Edital 2026 · Consulplan</p>
+                      <p className="text-white font-bold text-sm">Guarda Municipal de Aracaju</p>
+                      <p className="text-white/60 text-xs mt-0.5">100 vagas · Edital 2026 · IDECAN</p>
                     </div>
                   </div>
                 </div>
@@ -406,14 +407,14 @@ const Index: React.FC = () => {
                   Estudar muito não é o mesmo que estudar certo.
                 </h2>
                 <p className="text-muted-foreground text-sm leading-7 mb-5">
-                  A maioria dos candidatos perde tempo com apostila genérica que não tem nada a ver com a Consulplan. O GuardaQuest é diferente: cada questão foi elaborada no estilo exato da banca, cobrindo as 9 matérias do edital na proporção certa.
+                  A maioria dos candidatos perde tempo com apostila genérica que não tem nada a ver com a IDECAN. O GuardaQuest é diferente: cada questão foi elaborada no estilo exato da banca, cobrindo as 9 matérias do edital na proporção certa.
                 </p>
                 <p className="text-muted-foreground text-sm leading-7 mb-8">
                   Com mais de <strong className="text-foreground">500 questões comentadas</strong>, você entende o porquê de cada resposta. Com os simulados cronometrados, treina a resistência para não travar na hora H.
                 </p>
                 <div className="space-y-3">
                   {[
-                    "Questões no estilo da Consulplan, banca responsável pela prova",
+                    "Questões no estilo da IDECAN, banca responsável pela prova",
                     "Cada questão tem comentário, fundamento legal e dica de prova",
                     "Simulado com nota ponderada — sabe se você passaria hoje",
                     "PDFs por matéria com gabarito para estudar offline e imprimir",
@@ -435,10 +436,10 @@ const Index: React.FC = () => {
         <section className="border-y border-border/50 bg-card/50 py-16 sm:py-20">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
             <div className="text-center mb-10">
-              <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Edital oficial · Consulplan 2026</p>
+              <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Edital oficial · IDECAN 2026</p>
               <h2 className="font-display text-2xl sm:text-3xl font-black text-foreground">9 matérias. Saiba onde focar.</h2>
               <p className="mt-3 text-sm text-muted-foreground max-w-md mx-auto">
-                <strong className="text-foreground">Legislação Específica vale 30 pontos</strong> — o dobro das outras. Comece por ela.
+                <strong className="text-foreground">Língua Portuguesa vale 20 pontos</strong> e as 4 jurídicas valem 1,5 ponto por questão. É onde está o jogo.
               </p>
             </div>
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -448,7 +449,7 @@ const Index: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-foreground truncate">{m.nome}</p>
                     <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${(m.pts / 30) * 100}%`, backgroundColor: m.cor }} />
+                      <div className="h-full rounded-full" style={{ width: `${(m.pts / 20) * 100}%`, backgroundColor: m.cor }} />
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -460,7 +461,7 @@ const Index: React.FC = () => {
             </div>
             <div className="mt-6 p-4 rounded-2xl bg-primary/5 border border-primary/15 text-center">
               <p className="text-xs text-muted-foreground">
-                🎯 <strong className="text-foreground">Total:</strong> 60 questões · 100 pontos · Nota mínima 60pts
+                🎯 <strong className="text-foreground">Total:</strong> 80 questões · 110 pontos · Nota mínima 55pts · 4 horas
               </p>
             </div>
           </div>
@@ -477,9 +478,9 @@ const Index: React.FC = () => {
                 </h2>
                 <div className="space-y-2.5">
                   {[
-                    { sem: "Questões genéricas fora do estilo Consulplan",    com: "+500 questões no estilo exato da banca" },
+                    { sem: "Questões genéricas fora do estilo IDECAN",        com: "+500 questões no estilo exato da banca" },
                     { sem: "Não sabe o peso de cada matéria",                 com: "Peso de cada matéria sempre visível" },
-                    { sem: "Sem simulado com o tempo real da prova",          com: "Simulado: 60 questões · 4 horas" },
+                    { sem: "Sem simulado com o tempo real da prova",          com: "Simulado: 80 questões · 4 horas" },
                     { sem: "Sem nota ponderada para medir aprovação",         com: "Nota real calculada por matéria" },
                     { sem: "Sem saber onde está errando mais",                com: "Análise detalhada de cada erro" },
                     { sem: "Sem referência dos outros candidatos",            com: "Ranking para saber sua posição" },
@@ -499,11 +500,11 @@ const Index: React.FC = () => {
                 </div>
               </div>
               <div className="relative rounded-3xl overflow-hidden shadow-2xl order-1 lg:order-2 group">
-                <img src={IMG_VIATURA} alt="Viatura da Guarda Municipal de Manaus"
+                <img src={IMG_VIATURA} alt="Viatura da Guarda Municipal de Aracaju"
                   className="w-full h-72 sm:h-[420px] object-cover group-hover:scale-105 transition-transform duration-700" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#010a1e]/80 via-transparent to-transparent" />
                 <div className="absolute bottom-5 left-5 right-5 grid grid-cols-3 gap-2">
-                  {[{ v: "+500", l: "questões" }, { v: "9", l: "matérias" }, { v: "590", l: "vagas" }].map(s => (
+                  {[{ v: "+500", l: "questões" }, { v: "9", l: "matérias" }, { v: "100", l: "vagas" }].map(s => (
                     <div key={s.l} className="bg-black/60 backdrop-blur-md border border-white/15 rounded-xl p-3 text-center">
                       <p className="text-white font-black text-lg leading-none">{s.v}</p>
                       <p className="text-white/60 text-[10px] font-semibold mt-1 uppercase">{s.l}</p>
@@ -551,8 +552,8 @@ const Index: React.FC = () => {
                 <div className="space-y-2">
                   {[
                     { pos: 1, nome: "GuardaConcurseiro", pts: 476, nota: "95%", titulo: "👑 Comandante", cor: "#3B82F6" },
-                    { pos: 2, nome: "AnaGCM2026",        pts: 452, nota: "90%", titulo: "💎 Capitão",    cor: "#10B981" },
-                    { pos: 3, nome: "ManauaraForte",     pts: 431, nota: "86%", titulo: "🔴 Tenente",    cor: "#EF4444" },
+                    { pos: 2, nome: "AnaGM2026",         pts: 452, nota: "90%", titulo: "💎 Capitão",    cor: "#10B981" },
+                    { pos: 3, nome: "AracajuanoForte",   pts: 431, nota: "86%", titulo: "🔴 Tenente",    cor: "#EF4444" },
                     { pos: 4, nome: "você?",             pts: "—", nota: "—",   titulo: "🪖 Recruta",   cor: "#6B7280" },
                   ].map((r) => (
                     <div key={r.pos} className={`flex items-center gap-3 p-3 rounded-xl ${r.pos === 4 ? "border-2 border-dashed border-primary/40 bg-primary/5" : "bg-muted/50"}`}>
@@ -592,11 +593,11 @@ const Index: React.FC = () => {
             <h2 className="font-display text-3xl sm:text-4xl font-black text-foreground mb-4 leading-tight">
               A prova é em{" "}
               <span style={{ background: "var(--gradient-hero)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                24 de maio de 2026.
+                13 de setembro de 2026.
               </span>
             </h2>
             <p className="text-muted-foreground text-base leading-7 mb-10 max-w-xl mx-auto">
-              São 590 vagas e milhares de candidatos. Cada dia sem estudar com direção é vantagem entregue para outro.
+              São 100 vagas e milhares de candidatos. Cada dia sem estudar com direção é vantagem entregue para outro.
             </p>
             <div className="premium-card p-6 sm:p-8 rounded-3xl max-w-sm mx-auto shadow-2xl border-2 border-primary/10 mb-8">
               <div className="flex items-center justify-center gap-1 mb-3">
@@ -605,7 +606,7 @@ const Index: React.FC = () => {
               <div className="inline-flex items-center gap-2 bg-yellow-400/10 border border-yellow-400/30 rounded-full px-3 py-1 mb-3">
                 <span className="text-xs font-bold text-yellow-500">🔥 Preço promocional — primeiras semanas!</span>
               </div>
-              <p className="text-xs text-muted-foreground mb-5 font-medium">Acesso completo por 60 dias até a prova</p>
+              <p className="text-xs text-muted-foreground mb-5 font-medium">Acesso completo até o dia da prova</p>
               <div className="flex items-end justify-center gap-3 mb-6">
                 <span className="text-lg font-bold text-muted-foreground line-through">R$ 47</span>
                 <div>
@@ -677,7 +678,7 @@ const Index: React.FC = () => {
               <Shield size={28} color="#ffffff" />
             </div>
             <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: "12px" }}>
-              590 vagas · Salário R$ 3.060 · 24 mai 2026
+              100 vagas · Salário R$ 4.055,53 · 13 set 2026
             </p>
             <h2 style={{ fontSize: "clamp(1.8rem, 4vw, 3rem)", fontWeight: 900, color: "#ffffff", marginBottom: "20px", lineHeight: 1.1, textShadow: "0 2px 20px rgba(0,0,0,0.9)" }}>
               Não deixe para amanhã o estudo que pode te aprovar hoje.
@@ -717,11 +718,11 @@ const Index: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-black text-foreground">GuardaQuest</p>
-              <p className="text-[10px] text-muted-foreground">Plataforma GCM Manaus 2026</p>
+              <p className="text-[10px] text-muted-foreground">Plataforma Guarda Municipal de Aracaju 2026</p>
             </div>
           </div>
           <div className="text-center space-y-1">
-            <p className="text-xs text-muted-foreground">© 2026 GuardaQuest · Manaus/AM · www.guardaquest.com.br</p>
+            <p className="text-xs text-muted-foreground">© 2026 GuardaQuest · Aracaju/SE · www.guardaquest.com.br</p>
             <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
               <Link to="/privacidade" className="hover:text-foreground transition-colors">Política de Privacidade</Link>
               <span>·</span>

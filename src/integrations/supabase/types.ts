@@ -10,10 +10,52 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          categoria: string | null
+          codigo: string
+          created_at: string | null
+          descricao: string
+          icone: string | null
+          id: string
+          nome: string
+          requisito_extra: string | null
+          requisito_tipo: string
+          requisito_valor: number
+          xp_bonus: number | null
+        }
+        Insert: {
+          categoria?: string | null
+          codigo: string
+          created_at?: string | null
+          descricao: string
+          icone?: string | null
+          id?: string
+          nome: string
+          requisito_extra?: string | null
+          requisito_tipo: string
+          requisito_valor: number
+          xp_bonus?: number | null
+        }
+        Update: {
+          categoria?: string | null
+          codigo?: string
+          created_at?: string | null
+          descricao?: string
+          icone?: string | null
+          id?: string
+          nome?: string
+          requisito_extra?: string | null
+          requisito_tipo?: string
+          requisito_valor?: number
+          xp_bonus?: number | null
+        }
+        Relationships: []
+      }
       bookmarks: {
         Row: {
           created_at: string
@@ -42,6 +84,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      concursos: {
+        Row: {
+          ativo: boolean
+          banca: string
+          cargo: string
+          created_at: string
+          data_prova: string | null
+          encerrado: boolean
+          id: string
+          nome: string
+          ordem: number
+          orgao: string
+          slug: string
+          uf: string
+        }
+        Insert: {
+          ativo?: boolean
+          banca?: string
+          cargo?: string
+          created_at?: string
+          data_prova?: string | null
+          encerrado?: boolean
+          id?: string
+          nome: string
+          ordem?: number
+          orgao?: string
+          slug: string
+          uf?: string
+        }
+        Update: {
+          ativo?: boolean
+          banca?: string
+          cargo?: string
+          created_at?: string
+          data_prova?: string | null
+          encerrado?: boolean
+          id?: string
+          nome?: string
+          ordem?: number
+          orgao?: string
+          slug?: string
+          uf?: string
+        }
+        Relationships: []
       }
       content_updates: {
         Row: {
@@ -118,26 +205,183 @@ export type Database = {
         }
         Relationships: []
       }
+      hotmart_purchases: {
+        Row: {
+          amount_paid: number | null
+          buyer_email: string
+          buyer_name: string | null
+          concurso_id: string | null
+          created_at: string | null
+          expires_at: string | null
+          hotmart_product_id: string | null
+          hotmart_transaction: string
+          id: string
+          status: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount_paid?: number | null
+          buyer_email: string
+          buyer_name?: string | null
+          concurso_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          hotmart_product_id?: string | null
+          hotmart_transaction: string
+          id?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount_paid?: number | null
+          buyer_email?: string
+          buyer_name?: string | null
+          concurso_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          hotmart_product_id?: string | null
+          hotmart_transaction?: string
+          id?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotmart_purchases_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lgpd_consents: {
+        Row: {
+          aceita_cookies_analytics: boolean
+          aceita_cookies_essenciais: boolean
+          aceita_privacidade: boolean
+          aceita_termos: boolean
+          aceito_em: string
+          created_at: string | null
+          id: string
+          ip_address: string | null
+          revogado_em: string | null
+          session_id: string | null
+          user_agent: string | null
+          user_id: string | null
+          versao_privacidade: string
+          versao_termos: string
+        }
+        Insert: {
+          aceita_cookies_analytics?: boolean
+          aceita_cookies_essenciais?: boolean
+          aceita_privacidade?: boolean
+          aceita_termos?: boolean
+          aceito_em?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          revogado_em?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          versao_privacidade?: string
+          versao_termos?: string
+        }
+        Update: {
+          aceita_cookies_analytics?: boolean
+          aceita_cookies_essenciais?: boolean
+          aceita_privacidade?: boolean
+          aceita_termos?: boolean
+          aceito_em?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          revogado_em?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          versao_privacidade?: string
+          versao_termos?: string
+        }
+        Relationships: []
+      }
+      lgpd_requests: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          email: string
+          id: string
+          respondido_em: string | null
+          status: string
+          tipo: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          email: string
+          id?: string
+          respondido_em?: string | null
+          status?: string
+          tipo: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          email?: string
+          id?: string
+          respondido_em?: string | null
+          status?: string
+          tipo?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          avatar_cor: string
+          concurso_atual: string | null
           created_at: string
           id: string
           name: string
+          nickname: string | null
+          participar_ranking: boolean
           user_id: string
         }
         Insert: {
+          avatar_cor?: string
+          concurso_atual?: string | null
           created_at?: string
           id?: string
           name?: string
+          nickname?: string | null
+          participar_ranking?: boolean
           user_id: string
         }
         Update: {
+          avatar_cor?: string
+          concurso_atual?: string | null
           created_at?: string
           id?: string
           name?: string
+          nickname?: string | null
+          participar_ranking?: boolean
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_concurso_atual_fkey"
+            columns: ["concurso_atual"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       question_attempts: {
         Row: {
@@ -218,6 +462,7 @@ export type Database = {
           ano: number
           banca: string
           cargo: string
+          concurso_id: string | null
           correct_option_comment: string
           created_at: string
           dificuldade: Database["public"]["Enums"]["difficulty_level"]
@@ -245,6 +490,7 @@ export type Database = {
           ano?: number
           banca?: string
           cargo?: string
+          concurso_id?: string | null
           correct_option_comment?: string
           created_at?: string
           dificuldade?: Database["public"]["Enums"]["difficulty_level"]
@@ -272,6 +518,7 @@ export type Database = {
           ano?: number
           banca?: string
           cargo?: string
+          concurso_id?: string | null
           correct_option_comment?: string
           created_at?: string
           dificuldade?: Database["public"]["Enums"]["difficulty_level"]
@@ -297,6 +544,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "questions_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "questions_subject_id_fkey"
             columns: ["subject_id"]
             isOneToOne: false
@@ -311,6 +565,145 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ranking_semanal: {
+        Row: {
+          acertos_semana: number
+          concurso_id: string | null
+          created_at: string | null
+          id: string
+          pontuacao_semana: number
+          questoes_semana: number
+          semana_inicio: string
+          simulados_semana: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          acertos_semana?: number
+          concurso_id?: string | null
+          created_at?: string | null
+          id?: string
+          pontuacao_semana?: number
+          questoes_semana?: number
+          semana_inicio: string
+          simulados_semana?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          acertos_semana?: number
+          concurso_id?: string | null
+          created_at?: string | null
+          id?: string
+          pontuacao_semana?: number
+          questoes_semana?: number
+          semana_inicio?: string
+          simulados_semana?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ranking_semanal_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ranking_simulados: {
+        Row: {
+          concurso_id: string | null
+          created_at: string | null
+          id: string
+          media_pontuacao: number
+          melhor_pontuacao: number
+          pontos_ranking: number
+          posicao: number | null
+          simulados_aprovados: number
+          streak_simulados: number
+          total_acertos_simulado: number
+          total_questoes_simulado: number
+          total_simulados: number
+          ultima_pontuacao: number
+          ultimo_simulado: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          concurso_id?: string | null
+          created_at?: string | null
+          id?: string
+          media_pontuacao?: number
+          melhor_pontuacao?: number
+          pontos_ranking?: number
+          posicao?: number | null
+          simulados_aprovados?: number
+          streak_simulados?: number
+          total_acertos_simulado?: number
+          total_questoes_simulado?: number
+          total_simulados?: number
+          ultima_pontuacao?: number
+          ultimo_simulado?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          concurso_id?: string | null
+          created_at?: string | null
+          id?: string
+          media_pontuacao?: number
+          melhor_pontuacao?: number
+          pontos_ranking?: number
+          posicao?: number | null
+          simulados_aprovados?: number
+          streak_simulados?: number
+          total_acertos_simulado?: number
+          total_questoes_simulado?: number
+          total_simulados?: number
+          ultima_pontuacao?: number
+          ultimo_simulado?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ranking_simulados_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      security_events: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       simulation_results: {
         Row: {
@@ -360,33 +753,61 @@ export type Database = {
       }
       simulations: {
         Row: {
+          concluido: boolean
+          concurso_id: string | null
           finished_at: string | null
           id: string
+          percentual_acerto: number | null
+          pontuacao: number | null
           started_at: string
           subject_id: string | null
+          tempo_segundos: number | null
           titulo: string
+          total_acertos: number | null
+          total_erros: number | null
           total_questions: number
           user_id: string
         }
         Insert: {
+          concluido?: boolean
+          concurso_id?: string | null
           finished_at?: string | null
           id?: string
+          percentual_acerto?: number | null
+          pontuacao?: number | null
           started_at?: string
           subject_id?: string | null
+          tempo_segundos?: number | null
           titulo?: string
+          total_acertos?: number | null
+          total_erros?: number | null
           total_questions?: number
           user_id: string
         }
         Update: {
+          concluido?: boolean
+          concurso_id?: string | null
           finished_at?: string | null
           id?: string
+          percentual_acerto?: number | null
+          pontuacao?: number | null
           started_at?: string
           subject_id?: string | null
+          tempo_segundos?: number | null
           titulo?: string
+          total_acertos?: number | null
+          total_erros?: number | null
           total_questions?: number
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "simulations_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "simulations_subject_id_fkey"
             columns: ["subject_id"]
@@ -398,6 +819,7 @@ export type Database = {
       }
       study_sessions: {
         Row: {
+          concurso_id: string | null
           current_index: number
           filters: Json
           id: string
@@ -408,6 +830,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          concurso_id?: string | null
           current_index?: number
           filters?: Json
           id?: string
@@ -418,6 +841,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          concurso_id?: string | null
           current_index?: number
           filters?: Json
           id?: string
@@ -427,28 +851,53 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "study_sessions_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subjects: {
         Row: {
+          concurso_id: string
           created_at: string
           id: string
           name: string
+          num_questoes_prova: number | null
           order_num: number
+          peso_prova: number | null
         }
         Insert: {
+          concurso_id: string
           created_at?: string
           id?: string
           name: string
+          num_questoes_prova?: number | null
           order_num?: number
+          peso_prova?: number | null
         }
         Update: {
+          concurso_id?: string
           created_at?: string
           id?: string
           name?: string
+          num_questoes_prova?: number | null
           order_num?: number
+          peso_prova?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subjects_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       topics: {
         Row: {
@@ -479,6 +928,35 @@ export type Database = {
           },
         ]
       }
+      user_achievements: {
+        Row: {
+          achievement_id: string
+          desbloqueado_em: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          achievement_id: string
+          desbloqueado_em?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          achievement_id?: string
+          desbloqueado_em?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_id_fkey"
+            columns: ["achievement_id"]
+            isOneToOne: false
+            referencedRelation: "achievements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -497,11 +975,157 @@ export type Database = {
         }
         Relationships: []
       }
+      user_scores: {
+        Row: {
+          concurso_id: string | null
+          created_at: string | null
+          dificeis_acertadas: number
+          id: string
+          melhor_nota_simulado: number | null
+          nivel: number
+          posicao_geral: number | null
+          simulados_completos: number
+          streak_dias: number
+          titulo: string
+          total_acertos: number
+          total_erros: number
+          total_questoes: number
+          total_xp: number
+          ultimo_estudo: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          concurso_id?: string | null
+          created_at?: string | null
+          dificeis_acertadas?: number
+          id?: string
+          melhor_nota_simulado?: number | null
+          nivel?: number
+          posicao_geral?: number | null
+          simulados_completos?: number
+          streak_dias?: number
+          titulo?: string
+          total_acertos?: number
+          total_erros?: number
+          total_questoes?: number
+          total_xp?: number
+          ultimo_estudo?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          concurso_id?: string | null
+          created_at?: string | null
+          dificeis_acertadas?: number
+          id?: string
+          melhor_nota_simulado?: number | null
+          nivel?: number
+          posicao_geral?: number | null
+          simulados_completos?: number
+          streak_dias?: number
+          titulo?: string
+          total_acertos?: number
+          total_erros?: number
+          total_questoes?: number
+          total_xp?: number
+          ultimo_estudo?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_scores_concurso_id_fkey"
+            columns: ["concurso_id"]
+            isOneToOne: false
+            referencedRelation: "concursos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xp_history: {
+        Row: {
+          created_at: string | null
+          descricao: string | null
+          id: string
+          motivo: string
+          user_id: string
+          xp_ganho: number
+        }
+        Insert: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          motivo: string
+          user_id: string
+          xp_ganho: number
+        }
+        Update: {
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          motivo?: string
+          user_id?: string
+          xp_ganho?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      ranking_geral: {
+        Row: {
+          avatar_cor: string | null
+          concurso_id: string | null
+          media_pontuacao: number | null
+          melhor_pontuacao: number | null
+          nickname: string | null
+          nome_exibido: string | null
+          pontos_ranking: number | null
+          posicao: number | null
+          simulados_aprovados: number | null
+          streak_simulados: number | null
+          taxa_acerto_geral: number | null
+          titulo: string | null
+          total_simulados: number | null
+          ultima_pontuacao: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      ranking_semanal_atual: {
+        Row: {
+          acertos_semana: number | null
+          avatar_cor: string | null
+          concurso_id: string | null
+          nickname: string | null
+          nome_exibido: string | null
+          pontuacao_semana: number | null
+          posicao: number | null
+          questoes_semana: number | null
+          simulados_semana: number | null
+          taxa_acerto_semana: number | null
+          titulo: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      atualizar_score_questao: {
+        Args: {
+          p_dificuldade?: string
+          p_is_correct: boolean
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      calcular_nivel: {
+        Args: { xp: number }
+        Returns: {
+          nivel: number
+          titulo: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -509,6 +1133,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      meu_status_acesso: { Args: never; Returns: Json }
+      minha_posicao_ranking: { Args: { p_user_id: string }; Returns: Json }
+      registrar_simulado_concluido: {
+        Args: {
+          p_simulation_id: string
+          p_tempo_segundos?: number
+          p_total_acertos: number
+          p_total_questoes: number
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      revogar_acessos_expirados: { Args: never; Returns: undefined }
+      tem_acesso_ativo: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Subject } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,24 +10,29 @@ import { FileText, Clock, Play, BookOpen, Shield, CheckCircle2 } from "lucide-re
 interface Props {
   subjects: Subject[];
   onStart: (subject: string, count: number) => void;
+  onStartOficial?: () => void;
+  oficialTotal?: number;
   minutesPerQuestion: number;
 }
 
-const ExamSetup: React.FC<Props> = ({ subjects, onStart, minutesPerQuestion }) => {
+const ExamSetup: React.FC<Props> = ({ subjects, onStart, onStartOficial, oficialTotal = 0, minutesPerQuestion }) => {
+  const { concursoId, concursoAtual } = useConcurso();
   const [selectedSubject, setSelectedSubject] = useState("all");
   const [questionCount, setQuestionCount] = useState(20);
   const [availableCount, setAvailableCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingOficial, setLoadingOficial] = useState(false);
 
   useEffect(() => {
+    if (!concursoId) return;
     const fetch = async () => {
-      let query = supabase.from("questions").select("id", { count: "exact" }).eq("status", "publicado");
+      let query = supabase.from("questions").select("id", { count: "exact", head: true }).eq("status", "publicado").eq("concurso_id", concursoId);
       if (selectedSubject !== "all") query = query.eq("subject_id", selectedSubject);
       const { count } = await query;
       setAvailableCount(count);
     };
     fetch();
-  }, [selectedSubject]);
+  }, [selectedSubject, concursoId]);
 
   const totalMinutes = questionCount * minutesPerQuestion;
   const hours = Math.floor(totalMinutes / 60);
@@ -49,10 +55,38 @@ const ExamSetup: React.FC<Props> = ({ subjects, onStart, minutesPerQuestion }) =
         </div>
         <h1 className="text-2xl font-extrabold text-foreground font-display">Simulado</h1>
         <p className="text-sm text-muted-foreground mt-1.5">Configure sua prova e inicie quando estiver pronto</p>
-        <span className="badge-pre-edital mt-3 inline-block">GM Manaus</span>
+        {concursoAtual && <span className="badge-pre-edital mt-3 inline-block">{concursoAtual.nome}</span>}
       </div>
 
+      {/* ── Simulado oficial do edital ── */}
+      {onStartOficial && oficialTotal > 0 && (
+        <button
+          onClick={async () => { setLoadingOficial(true); await onStartOficial(); setLoadingOficial(false); }}
+          disabled={loadingOficial}
+          className="w-full mb-5 rounded-2xl p-5 text-left transition-all border-2 border-primary/40 bg-primary/5 hover:bg-primary/10 disabled:opacity-60"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--gradient-hero)" }}>
+              {loadingOficial
+                ? <span className="animate-spin w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full" />
+                : <FileText className="w-5 h-5 text-primary-foreground" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-extrabold text-foreground">🎯 Simulado Oficial do Edital</p>
+                <span className="text-[10px] font-bold bg-primary/15 text-primary px-2 py-0.5 rounded-full">RECOMENDADO</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {oficialTotal} questões na distribuição exata da prova · 4 horas · pontuação ponderada · regra de eliminação
+              </p>
+            </div>
+            <Play className="w-5 h-5 text-primary shrink-0" />
+          </div>
+        </button>
+      )}
+
       <div className="premium-card p-6 space-y-6">
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Ou monte um simulado personalizado</p>
         {/* Subject */}
         <div>
           <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2.5 block">

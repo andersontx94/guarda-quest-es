@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { SimSession } from "@/pages/SimulationsPage";
+import { SimSession, SimResults } from "@/pages/SimulationsPage";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -17,12 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
-  results: {
-    correct: number;
-    total: number;
-    timeUsed: number;
-    bySubject: Record<string, { total: number; correct: number }>;
-  };
+  results: SimResults;
   session: SimSession;
   subjectName: (id: string) => string;
   onNewExam: () => void;
@@ -53,7 +48,7 @@ const getPerformanceMessage = (pct: number) => {
     return {
       emoji: "✅",
       title: "Aprovado na nota de corte!",
-      desc: "Você atingiu os 60 pontos da GCM Manaus! Mantenha o foco para garantir a aprovação.",
+      desc: "Você atingiu a nota de corte! Mantenha o foco para garantir a aprovação.",
     };
   if (pct >= 50)
     return {
@@ -219,37 +214,90 @@ const ExamResults: React.FC<Props> = ({
       </div>
 
       {/* Score */}
-      <div className="premium-card text-center p-8 mb-4">
-        <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold mb-2">
-          Sua nota
-        </p>
-        <p
-          className="text-6xl font-black font-display"
-          style={{
-            color:
-              pct >= 60
-                ? "hsl(var(--success))"
-                : pct >= 50
-                ? "hsl(var(--warning))"
-                : "hsl(var(--destructive))",
-          }}
-        >
-          {pct}%
-        </p>
-        <Progress
-          value={pct}
-          className="h-3 mt-4 max-w-[220px] mx-auto"
-        />
-        {pct >= 60 ? (
-          <p className="text-xs text-success font-bold mt-2">
-            ✅ Acima da nota de corte (60%)
+      {results.oficial ? (
+        (() => {
+          const pontos = results.pontos ?? 0;
+          const pontosMax = results.pontosMax ?? 0;
+          const corte = results.notaCorte ?? 0;
+          const aprovado = !results.eliminado && pontos >= corte;
+          return (
+            <>
+              <div className="premium-card text-center p-8 mb-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold mb-2">
+                  Sua pontuação ponderada
+                </p>
+                <p
+                  className="text-6xl font-black font-display"
+                  style={{ color: aprovado ? "hsl(var(--success))" : "hsl(var(--destructive))" }}
+                >
+                  {pontos}
+                  <span className="text-2xl text-muted-foreground">/{pontosMax}</span>
+                </p>
+                <Progress
+                  value={pontosMax > 0 ? (pontos / pontosMax) * 100 : 0}
+                  className="h-3 mt-4 max-w-[220px] mx-auto"
+                />
+                <p className="text-xs text-muted-foreground mt-2">Nota de corte: {corte} pontos</p>
+              </div>
+              {results.eliminado ? (
+                <div className="premium-card p-4 mb-4 border border-destructive/30 bg-destructive/5 text-center">
+                  <p className="text-sm font-bold text-destructive">❌ Eliminado</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Você zerou pelo menos uma disciplina. No edital, zerar qualquer matéria elimina o
+                    candidato, independentemente da nota total.
+                  </p>
+                </div>
+              ) : aprovado ? (
+                <div className="premium-card p-4 mb-4 border border-success/30 bg-success/5 text-center">
+                  <p className="text-sm font-bold text-success">✅ Aprovado!</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Você atingiu a nota de corte e não zerou nenhuma disciplina.
+                  </p>
+                </div>
+              ) : (
+                <div className="premium-card p-4 mb-4 border border-warning/30 bg-warning/5 text-center">
+                  <p className="text-sm font-bold text-warning">Abaixo da nota de corte</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Faltaram {Math.round((corte - pontos) * 10) / 10} pontos para a aprovação.
+                  </p>
+                </div>
+              )}
+            </>
+          );
+        })()
+      ) : (
+        <div className="premium-card text-center p-8 mb-4">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold mb-2">
+            Sua nota
           </p>
-        ) : (
-          <p className="text-xs text-destructive font-bold mt-2">
-            Nota de corte: 60% — faltaram {60 - pct}%
+          <p
+            className="text-6xl font-black font-display"
+            style={{
+              color:
+                pct >= 60
+                  ? "hsl(var(--success))"
+                  : pct >= 50
+                  ? "hsl(var(--warning))"
+                  : "hsl(var(--destructive))",
+            }}
+          >
+            {pct}%
           </p>
-        )}
-      </div>
+          <Progress
+            value={pct}
+            className="h-3 mt-4 max-w-[220px] mx-auto"
+          />
+          {pct >= 60 ? (
+            <p className="text-xs text-success font-bold mt-2">
+              ✅ Acima da nota de corte (60%)
+            </p>
+          ) : (
+            <p className="text-xs text-destructive font-bold mt-2">
+              Nota de corte: 60% — faltaram {60 - pct}%
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Mensagem de desempenho */}
       <div className="premium-card p-5 mb-4">
@@ -365,6 +413,12 @@ const ExamResults: React.FC<Props> = ({
                   <Progress value={p} className="h-2" />
                   <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">
                     {data.correct}/{data.total} acertos
+                    {results.oficial && results.bySubjectPontos?.[sid] && (
+                      <span className={data.correct === 0 ? "text-destructive font-bold" : ""}>
+                        {" · "}{results.bySubjectPontos[sid].pontos}/{results.bySubjectPontos[sid].pontosMax} pts
+                        {data.correct === 0 ? " — zerou!" : ""}
+                      </span>
+                    )}
                   </p>
                 </div>
               );

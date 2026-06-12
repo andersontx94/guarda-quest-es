@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -152,20 +153,23 @@ const renderLoadingPreview = (previewTab: Window, subjectName: string) => {
 };
 
 const MateriaisPage: React.FC = () => {
+  const { concursoId, concursoAtual } = useConcurso();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [states, setStates] = useState<Record<string, DownloadState>>({});
 
   useEffect(() => {
+    if (!concursoId) return;
     supabase
       .from("subjects")
       .select("id, name, order_num")
+      .eq("concurso_id", concursoId)
       .order("order_num")
       .then(({ data }) => {
         if (data) setSubjects(data);
         setLoading(false);
       });
-  }, []);
+  }, [concursoId]);
 
   const setState = (id: string, state: DownloadState) =>
     setStates((prev) => ({ ...prev, [id]: state }));
@@ -334,9 +338,15 @@ const MateriaisPage: React.FC = () => {
         <p className="text-xs text-muted-foreground">
           Material exclusivo para alunos GuardaQuest - Nao compartilhe
         </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Prova GCM Manaus 2026 - 24 de maio de 2026 - Consulplan
-        </p>
+        {concursoAtual && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {concursoAtual.nome}
+            {concursoAtual.data_prova
+              ? ` - Prova ${new Date(concursoAtual.data_prova + "T00:00:00").toLocaleDateString("pt-BR")}`
+              : ""}
+            {concursoAtual.banca ? ` - ${concursoAtual.banca}` : ""}
+          </p>
+        )}
       </div>
     </div>
   );

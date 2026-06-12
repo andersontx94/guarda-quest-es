@@ -2,6 +2,8 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { Home, BookOpen, FileText, BarChart3, User, Shield, PenLine, Trophy, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
+import { ConcursoSelector } from "@/components/ConcursoSelector";
 
 const navItems = [
   { to: "/inicio", icon: Home, label: "Início" },
@@ -16,22 +18,23 @@ const navItems = [
 
 export const DesktopSidebar: React.FC = () => {
   const { isAdmin } = useAuth();
+  const { concursoAtual } = useConcurso();
+
+  const dataProva = concursoAtual?.data_prova
+    ? new Date(concursoAtual.data_prova + "T00:00:00").toLocaleDateString("pt-BR")
+    : null;
 
   return (
     <aside className="hidden lg:flex flex-col w-64 border-r border-border bg-card min-h-screen fixed left-0 top-0 z-40">
       <div className="p-5 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'var(--gradient-hero)' }}>
-            <Shield className="w-5 h-5 text-primary-foreground" />
+        <ConcursoSelector variant="sidebar" />
+        {concursoAtual && !concursoAtual.encerrado && (
+          <div className="mt-3">
+            <span className="badge-pre-edital">
+              {dataProva ? `Prova ${dataProva}` : "Edital 2026"}
+            </span>
           </div>
-          <div>
-            <h1 className="text-sm font-extrabold text-foreground leading-tight font-display">GM Manaus</h1>
-            <p className="text-[10px] text-muted-foreground font-medium">Questões e simulados</p>
-          </div>
-        </div>
-        <div className="mt-3">
-          <span className="badge-pre-edital">Edital 2026</span>
-        </div>
+        )}
       </div>
 
       <nav className="flex-1 py-4 px-3 space-y-1">
@@ -78,7 +81,7 @@ export const DesktopSidebar: React.FC = () => {
       )}
 
       <div className="p-4 border-t border-border">
-        <p className="text-[10px] text-muted-foreground text-center font-medium">© 2026 GM Manaus</p>
+        <p className="text-[10px] text-muted-foreground text-center font-medium">© 2026 GuardaQuest</p>
       </div>
     </aside>
   );

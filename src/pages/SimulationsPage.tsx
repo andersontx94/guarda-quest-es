@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Subject, QuestionOption } from "@/types/database";
 import { toast } from "sonner";
 import ExamSetup from "@/components/simulation/ExamSetup";
@@ -30,37 +31,50 @@ export interface SimSession {
   selectedSubject: string;
   questionCount: number;
   startedAt: number;
+  /** true = simulado oficial fiel ao edital (distribuição, peso, corte e eliminação) */
+  oficial?: boolean;
+}
+
+export interface SimResults {
+  correct: number;
+  total: number;
+  timeUsed: number;
+  bySubject: Record<string, { total: number; correct: number }>;
+  /** Campos do simulado oficial (placar ponderado pelo peso de cada disciplina) */
+  oficial?: boolean;
+  pontos?: number;        // pontos ponderados obtidos
+  pontosMax?: number;     // pontos máximos (ex.: 110 em Aracaju)
+  notaCorte?: number;     // pontos mínimos para aprovação (ex.: 55)
+  eliminado?: boolean;    // zerou alguma disciplina
+  bySubjectPontos?: Record<string, { pontos: number; pontosMax: number; peso: number }>;
 }
 
 const MINUTES_PER_QUESTION = 3;
-const LOCAL_KEY = (uid: string) => `sim_session_${uid}`;
+const LOCAL_KEY = (uid: string, concursoId: string | null) => `sim_session_${uid}_${concursoId ?? "default"}`;
 
 const SimulationsPage: React.FC = () => {
   const { user } = useAuth();
+  const { concursoId, concursoAtual } = useConcurso();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [state, setState] = useState<SimState>("setup");
   const [session, setSession] = useState<SimSession | null>(null);
-  const [results, setResults] = useState<{
-    correct: number;
-    total: number;
-    timeUsed: number;
-    bySubject: Record<string, { total: number; correct: number }>;
-  } | null>(null);
+  const [results, setResults] = useState<SimResults | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
-  // Load subjects
+  // Load subjects do concurso ativo
   useEffect(() => {
-    supabase.from("subjects").select("*").order("order_num").then(({ data }) => {
+    if (!concursoId) return;
+    supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num").then(({ data }) => {
       if (data) setSubjects(data);
     });
-  }, []);
+  }, [concursoId]);
 
   // Restore session from localStorage on mount
   useEffect(() => {
-    if (!user) return;
-    const saved = localStorage.getItem(LOCAL_KEY(user.id));
+    if (!user || !concursoId) return;
+    const saved = localStorage.getItem(LOCAL_KEY(user.id, concursoId));
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -76,13 +90,13 @@ const SimulationsPage: React.FC = () => {
           setState("running");
           toast("Prova restaurada! Continue de onde parou.", { duration: 2000 });
         } else {
-          localStorage.removeItem(LOCAL_KEY(user.id));
+          localStorage.removeItem(LOCAL_KEY(user.id, concursoId));
         }
       } catch {
-        localStorage.removeItem(LOCAL_KEY(user.id));
+        localStorage.removeItem(LOCAL_KEY(user.id, concursoId));
       }
     }
-  }, [user]);
+  }, [user, concursoId]);
 
   // Persist session to localStorage
   const persistSession = useCallback((s: SimSession) => {
@@ -91,8 +105,8 @@ const SimulationsPage: React.FC = () => {
       ...s,
       markedForReview: Array.from(s.markedForReview),
     };
-    localStorage.setItem(LOCAL_KEY(user.id), JSON.stringify(toSave));
-  }, [user]);
+    localStorage.setItem(LOCAL_KEY(user.id, concursoId), JSON.stringify(toSave));
+  }, [user, concursoId]);
 
   // Timer
   useEffect(() => {
@@ -129,10 +143,12 @@ const SimulationsPage: React.FC = () => {
   const startSimulation = async (selectedSubject: string, questionCount: number) => {
     if (!user) return;
 
+    if (!concursoId) return;
     let query = supabase
       .from("questions")
       .select("id, enunciado, banca, ano, subject_id, question_options(*)")
-      .eq("status", "publicado");
+      .eq("status", "publicado")
+      .eq("concurso_id", concursoId);
     if (selectedSubject !== "all") query = query.eq("subject_id", selectedSubject);
 
     const { data } = await query;
@@ -146,6 +162,7 @@ const SimulationsPage: React.FC = () => {
 
     const { data: sim } = await supabase.from("simulations").insert({
       user_id: user.id,
+      concurso_id: concursoId,
       titulo: selectedSubject === "all" ? "Simulado Geral" : `Simulado - ${subjects.find(s => s.id === selectedSubject)?.name}`,
       subject_id: selectedSubject === "all" ? null : selectedSubject,
       total_questions: shuffled.length,
@@ -174,6 +191,82 @@ const SimulationsPage: React.FC = () => {
     persistSession(newSession);
     setState("running");
     toast("Prova iniciada! Boa sorte! 🎯", { duration: 2000 });
+  };
+
+  // ── Simulado OFICIAL: fiel ao edital (distribuição por disciplina, peso, 4h) ──
+  const startOfficialSimulation = async () => {
+    if (!user || !concursoId) return;
+
+    const subs = subjects.filter((s) => (s.num_questoes_prova ?? 0) > 0);
+    if (subs.length === 0) {
+      toast.error("Este concurso não tem distribuição de questões definida.");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("questions")
+      .select("id, enunciado, banca, ano, subject_id, question_options(*)")
+      .eq("status", "publicado")
+      .eq("concurso_id", concursoId);
+    if (error || !data) { toast.error("Erro ao carregar questões."); return; }
+
+    const bySub: Record<string, SimQuestion[]> = {};
+    (data as SimQuestion[]).forEach((q) => {
+      (bySub[q.subject_id] ||= []).push(q);
+    });
+
+    const exam: SimQuestion[] = [];
+    const faltas: string[] = [];
+    for (const s of subs) {
+      const need = s.num_questoes_prova ?? 0;
+      const pool = (bySub[s.id] ?? []).slice().sort(() => Math.random() - 0.5);
+      if (pool.length < need) faltas.push(`${s.name} (${pool.length}/${need})`);
+      exam.push(...pool.slice(0, need));
+    }
+
+    if (faltas.length > 0) {
+      toast.error(
+        `Questões insuficientes para montar o simulado oficial: ${faltas.join(", ")}. Publique mais questões no admin.`,
+        { duration: 7000 },
+      );
+      return;
+    }
+
+    const shuffled = exam.slice().sort(() => Math.random() - 0.5);
+    const totalTime = 4 * 60 * 60; // 4 horas, conforme edital
+
+    const { data: sim } = await supabase.from("simulations").insert({
+      user_id: user.id,
+      concurso_id: concursoId,
+      titulo: `Simulado Oficial — ${concursoAtual?.nome ?? "Edital"}`,
+      subject_id: null,
+      total_questions: shuffled.length,
+    }).select().single();
+
+    if (!sim) { toast.error("Erro ao criar simulado"); return; }
+
+    await supabase.from("simulation_results").insert(
+      shuffled.map((q) => ({ simulation_id: sim.id, question_id: q.id }))
+    );
+
+    const newSession: SimSession = {
+      simulationId: sim.id,
+      questions: shuffled,
+      answers: {},
+      markedForReview: new Set(),
+      currentIndex: 0,
+      timeRemaining: totalTime,
+      totalTime,
+      selectedSubject: "all",
+      questionCount: shuffled.length,
+      startedAt: Date.now(),
+      oficial: true,
+    };
+
+    setSession(newSession);
+    persistSession(newSession);
+    setState("running");
+    toast(`Simulado oficial iniciado! ${shuffled.length} questões · 4 horas 🎯`, { duration: 2500 });
   };
 
   const selectAnswer = (questionId: string, optionId: string) => {
@@ -238,8 +331,37 @@ const SimulationsPage: React.FC = () => {
       .eq("id", s.simulationId);
 
     const timeUsed = s.totalTime - s.timeRemaining;
-    setResults({ correct: correctCount, total: s.questions.length, timeUsed, bySubject });
-    localStorage.removeItem(LOCAL_KEY(user.id));
+
+    let resultsObj: SimResults = { correct: correctCount, total: s.questions.length, timeUsed, bySubject };
+
+    if (s.oficial) {
+      const pesoBy: Record<string, number> = {};
+      subjects.forEach((sub) => { pesoBy[sub.id] = sub.peso_prova ?? 0; });
+
+      const bySubjectPontos: Record<string, { pontos: number; pontosMax: number; peso: number }> = {};
+      let pontos = 0, pontosMax = 0, eliminado = false;
+      for (const [sid, d] of Object.entries(bySubject)) {
+        const peso = pesoBy[sid] ?? 0;
+        const p = d.correct * peso;
+        const pmax = d.total * peso;
+        bySubjectPontos[sid] = {
+          pontos: Math.round(p * 10) / 10,
+          pontosMax: Math.round(pmax * 10) / 10,
+          peso,
+        };
+        pontos += p;
+        pontosMax += pmax;
+        if (d.correct === 0) eliminado = true; // zerar disciplina = eliminado
+      }
+      pontos = Math.round(pontos * 10) / 10;
+      pontosMax = Math.round(pontosMax * 10) / 10;
+      const notaCorte = Math.round((pontosMax / 2) * 10) / 10; // 50% dos pontos
+
+      resultsObj = { ...resultsObj, oficial: true, pontos, pontosMax, notaCorte, eliminado, bySubjectPontos };
+    }
+
+    setResults(resultsObj);
+    localStorage.removeItem(LOCAL_KEY(user.id, concursoId));
     setState("finished");
     toast("Prova finalizada! 🏆", { duration: 2000 });
   };
@@ -253,7 +375,16 @@ const SimulationsPage: React.FC = () => {
   const subjectName = (id: string) => subjects.find(s => s.id === id)?.name || "Geral";
 
   if (state === "setup") {
-    return <ExamSetup subjects={subjects} onStart={startSimulation} minutesPerQuestion={MINUTES_PER_QUESTION} />;
+    const oficialTotal = subjects.reduce((acc, s) => acc + (s.num_questoes_prova ?? 0), 0);
+    return (
+      <ExamSetup
+        subjects={subjects}
+        onStart={startSimulation}
+        onStartOficial={startOfficialSimulation}
+        oficialTotal={oficialTotal}
+        minutesPerQuestion={MINUTES_PER_QUESTION}
+      />
+    );
   }
 
   if (state === "confirm" && session) {

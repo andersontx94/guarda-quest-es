@@ -1,8 +1,26 @@
+export interface Concurso {
+  id: string;
+  nome: string;
+  slug: string;
+  banca: string;
+  orgao: string;
+  uf: string;
+  cargo: string;
+  data_prova: string | null;
+  ativo: boolean;
+  encerrado: boolean;
+  ordem: number;
+  created_at: string;
+}
+
 export interface Subject {
   id: string;
   name: string;
   order_num: number;
   created_at: string;
+  concurso_id?: string;
+  peso_prova?: number | null;
+  num_questoes_prova?: number | null;
 }
 
 export interface Topic {

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { useToast } from "@/hooks/use-toast";
 
 interface RankingEntry {
@@ -69,6 +70,7 @@ const AvatarCircle: React.FC<{ cor: string; nome: string; size?: string }> = ({
 
 const RankingPage: React.FC = () => {
   const { user } = useAuth();
+  const { concursoId } = useConcurso();
   const { toast } = useToast();
 
   const [rankingGeral, setRankingGeral] = useState<RankingEntry[]>([]);
@@ -88,15 +90,15 @@ const RankingPage: React.FC = () => {
   ];
 
   const carregar = async () => {
-    if (!user) return;
+    if (!user || !concursoId) return;
     setLoading(true);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
 
       const [geralRes, semanalRes, minhaRes] = await Promise.all([
-        sb.from("ranking_geral").select("*").limit(50),
-        sb.from("ranking_semanal_atual").select("*").limit(50),
+        sb.from("ranking_geral").select("*").eq("concurso_id", concursoId).limit(50),
+        sb.from("ranking_semanal_atual").select("*").eq("concurso_id", concursoId).limit(50),
         sb.rpc("minha_posicao_ranking", { p_user_id: user.id }),
       ]);
 
@@ -119,7 +121,8 @@ const RankingPage: React.FC = () => {
 
   useEffect(() => {
     carregar();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, concursoId]);
 
   const salvarConfig = async () => {
     if (!user) return;

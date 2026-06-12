@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 import { BookOpen, Target, XCircle, TrendingUp, ArrowRight, Bell, Bookmark, Sparkles, Clock, GraduationCap, BookMarked, BarChart3, Shield, CheckCircle2, FileText, Zap, PenLine } from "lucide-react";
@@ -30,6 +31,7 @@ interface LastAttempt {
 
 const DashboardPage: React.FC = () => {
   const { profile, user } = useAuth();
+  const { concursoId } = useConcurso();
   const [stats, setStats] = useState<Stats>({ total: 0, correct: 0, incorrect: 0 });
   const [updates, setUpdates] = useState<Update[]>([]);
   const [bookmarkCount, setBookmarkCount] = useState(0);
@@ -40,14 +42,14 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !concursoId) return;
 
     const fetchAll = async () => {
       const [attRes, updRes, bkRes, subRes] = await Promise.all([
-        supabase.from("question_attempts").select("is_correct, question_id, answered_at, questions(subject_id)").eq("user_id", user.id).order("answered_at", { ascending: false }),
+        supabase.from("question_attempts").select("is_correct, question_id, answered_at, questions!inner(subject_id, concurso_id)").eq("user_id", user.id).eq("questions.concurso_id", concursoId).order("answered_at", { ascending: false }),
         supabase.from("content_updates").select("*").order("data_publicacao", { ascending: false }).limit(3),
-        supabase.from("bookmarks").select("id", { count: "exact" }).eq("user_id", user.id),
-        supabase.from("subjects").select("*").order("order_num"),
+        supabase.from("bookmarks").select("id, questions!inner(concurso_id)", { count: "exact" }).eq("user_id", user.id).eq("questions.concurso_id", concursoId),
+        supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num"),
       ]);
 
       if (attRes.data) {
@@ -88,7 +90,7 @@ const DashboardPage: React.FC = () => {
     };
 
     fetchAll();
-  }, [user]);
+  }, [user, concursoId]);
 
   const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
   const firstName = profile?.name?.split(" ")[0] || "Estudante";

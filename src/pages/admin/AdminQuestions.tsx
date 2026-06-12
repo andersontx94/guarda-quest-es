@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,7 @@ import { toast } from "sonner";
 type ViewMode = "list" | "edit";
 
 const AdminQuestions: React.FC = () => {
+  const { concursoId, concursoAtual } = useConcurso();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [questions, setQuestions] = useState<(Question & { question_options: QuestionOption[] })[]>([]);
@@ -50,11 +52,12 @@ const AdminQuestions: React.FC = () => {
   ]);
 
   const fetchData = async () => {
+    if (!concursoId) return;
     setLoading(true);
     const [sRes, tRes, qRes] = await Promise.all([
-      supabase.from("subjects").select("*").order("order_num"),
+      supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num"),
       supabase.from("topics").select("*"),
-      supabase.from("questions").select("*, question_options(*)").order("created_at", { ascending: false }),
+      supabase.from("questions").select("*, question_options(*)").eq("concurso_id", concursoId).order("created_at", { ascending: false }),
     ]);
     if (sRes.data) setSubjects(sRes.data);
     if (tRes.data) setTopics(tRes.data);
@@ -62,7 +65,7 @@ const AdminQuestions: React.FC = () => {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [concursoId]);
 
   const resetForm = () => {
     setForm({
@@ -129,7 +132,8 @@ const AdminQuestions: React.FC = () => {
       );
       toast.success("Questão atualizada");
     } else {
-      const { data, error } = await supabase.from("questions").insert(form).select().single();
+      if (!concursoId) { toast.error("Concurso não definido"); return; }
+      const { data, error } = await supabase.from("questions").insert({ ...form, concurso_id: concursoId }).select().single();
       if (error || !data) { toast.error("Erro ao criar"); return; }
       await supabase.from("question_options").insert(
         options.map((o) => ({ question_id: data.id, letter: o.letter, text: o.text, is_correct: o.is_correct }))
@@ -403,7 +407,10 @@ const AdminQuestions: React.FC = () => {
   return (
     <div className="animate-slide-up">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-foreground">Questões</h1>
+        <div>
+          <h1 className="text-xl font-bold text-foreground">Questões</h1>
+          <p className="text-xs text-muted-foreground">Concurso: <span className="font-semibold text-foreground">{concursoAtual?.nome ?? "—"}</span></p>
+        </div>
         <Button size="sm" onClick={() => { resetForm(); setViewMode("edit"); }}>
           <Plus className="w-4 h-4 mr-1" /> Nova
         </Button>

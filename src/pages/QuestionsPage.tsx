@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConcurso } from "@/contexts/ConcursoContext";
 import { Subject, Topic, Question, QuestionOption } from "@/types/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -15,21 +16,21 @@ import { sanitizeText } from "@/lib/textUtils";
 import { EmptyState } from "@/components/EmptyState";
 import { QuestionCardSkeleton } from "@/components/LoadingSkeleton";
 
-// ── Pesos das matérias conforme o edital GCM Manaus 2026 ──
-const PESOS_EDITAL: Record<string, { questoes: number; pontos: number; cor: string }> = {
-  "Legislação Específica":          { questoes: 15, pontos: 30,   cor: "#3B82F6" },
-  "Língua Portuguesa":              { questoes: 10, pontos: 15,   cor: "#8B5CF6" },
-  "Direito Constitucional":         { questoes: 5,  pontos: 10,   cor: "#EF4444" },
-  "Direito Penal":                  { questoes: 5,  pontos: 7.5,  cor: "#F59E0B" },
-  "Direito Processual Penal":       { questoes: 5,  pontos: 7.5,  cor: "#F97316" },
-  "Ética e Direitos Humanos":       { questoes: 5,  pontos: 7.5,  cor: "#10B981" },
-  "Legislação de Trânsito":         { questoes: 5,  pontos: 7.5,  cor: "#06B6D4" },
-  "Noções de Informática":          { questoes: 5,  pontos: 7.5,  cor: "#84CC16" },
-  "Geografia e História de Manaus": { questoes: 5,  pontos: 7.5,  cor: "#EC4899" },
-};
+// ── Pesos das matérias: derivados do banco (subjects.peso_prova / num_questoes_prova) ──
+type PesoInfo = { questoes: number; pontos: number; cor: string };
+const MATERIA_CORES = [
+  "#3B82F6", "#8B5CF6", "#EF4444", "#F59E0B", "#F97316",
+  "#10B981", "#06B6D4", "#84CC16", "#EC4899",
+];
+function pesoFromSubject(s: Subject, idx: number): PesoInfo {
+  const questoes = s.num_questoes_prova ?? 0;
+  const pontos = Math.round((s.peso_prova ?? 0) * questoes * 10) / 10;
+  return { questoes, pontos, cor: MATERIA_CORES[idx % MATERIA_CORES.length] };
+}
 
 // ── Helpers localStorage ──
-const LS_KEY = (userId: string) => `study_session_${userId}`;
+const LS_KEY = (userId: string, concursoId: string | null) =>
+  `study_session_${userId}_${concursoId ?? "default"}`;
 
 interface SessionData {
   questionIds: string[];
@@ -40,23 +41,24 @@ interface SessionData {
   updatedAt: string;
 }
 
-function saveSessionLocal(userId: string, data: SessionData) {
-  try { localStorage.setItem(LS_KEY(userId), JSON.stringify(data)); } catch {}
+function saveSessionLocal(userId: string, concursoId: string | null, data: SessionData) {
+  try { localStorage.setItem(LS_KEY(userId, concursoId), JSON.stringify(data)); } catch {}
 }
-function loadSessionLocal(userId: string): SessionData | null {
+function loadSessionLocal(userId: string, concursoId: string | null): SessionData | null {
   try {
-    const raw = localStorage.getItem(LS_KEY(userId));
+    const raw = localStorage.getItem(LS_KEY(userId, concursoId));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
-function clearSessionLocal(userId: string) {
-  try { localStorage.removeItem(LS_KEY(userId)); } catch {}
+function clearSessionLocal(userId: string, concursoId: string | null) {
+  try { localStorage.removeItem(LS_KEY(userId, concursoId)); } catch {}
 }
 
 const QUESTIONS_BATCH_SIZE = 500;
 const QUESTION_DETAILS_BATCH_SIZE = 100;
 type QuestionWithOptions = Question & { question_options: QuestionOption[] };
 type QuestionFilters = {
+  concursoId?: string;
   subjectId?: string;
   topicId?: string;
   difficulty?: "facil" | "medio" | "dificil";
@@ -86,6 +88,7 @@ function buildPublishedQuestionsQuery(selectClause: string, filters?: QuestionFi
     .eq("status", "publicado")
     .order("created_at", { ascending: false });
 
+  if (filters?.concursoId) query = query.eq("concurso_id", filters.concursoId);
   if (filters?.subjectId) query = query.eq("subject_id", filters.subjectId);
   if (filters?.topicId) query = query.eq("topic_id", filters.topicId);
   if (filters?.difficulty) query = query.eq("dificuldade", filters.difficulty);
@@ -102,11 +105,12 @@ async function fetchAllPublishedQuestionIds(filters?: QuestionFilters) {
       .range(from, from + QUESTIONS_BATCH_SIZE - 1);
 
     if (error) throw error;
-    if (!data?.length) break;
+    const rows = (data ?? []) as unknown as { id: string }[];
+    if (!rows.length) break;
 
-    allRows.push(...data);
+    allRows.push(...rows);
 
-    if (data.length < QUESTIONS_BATCH_SIZE) break;
+    if (rows.length < QUESTIONS_BATCH_SIZE) break;
     from += QUESTIONS_BATCH_SIZE;
   }
 
@@ -148,15 +152,17 @@ async function fetchQuestionsByIds(questionIds: string[]) {
     .filter(Boolean) as QuestionWithOptions[];
 }
 
-async function fetchAllPublishedQuestionSubjectIds() {
+async function fetchAllPublishedQuestionSubjectIds(concursoId?: string) {
   const allRows: { subject_id: string }[] = [];
   let from = 0;
 
   while (true) {
-    const { data, error } = await supabase
+    let q = supabase
       .from("questions")
       .select("subject_id")
-      .eq("status", "publicado")
+      .eq("status", "publicado");
+    if (concursoId) q = q.eq("concurso_id", concursoId);
+    const { data, error } = await q
       .range(from, from + QUESTIONS_BATCH_SIZE - 1);
 
     if (error) throw error;
@@ -177,10 +183,16 @@ interface MateriaSelectorProps {
   selectedSubject: string;
   onSelect: (id: string) => void;
   totalBySubject: Record<string, number>;
+  pesos: Record<string, PesoInfo>;
+  totalQuestoes: number;
+  totalPontos: number;
+  maxPontos: number;
+  concursoNome: string;
 }
 
 const MateriaSelector: React.FC<MateriaSelectorProps> = ({
   subjects, selectedSubject, onSelect, totalBySubject,
+  pesos, totalQuestoes, totalPontos, maxPontos, concursoNome,
 }) => (
   <div className="mb-6">
     <div className="flex items-center gap-2 mb-3">
@@ -204,8 +216,8 @@ const MateriaSelector: React.FC<MateriaSelectorProps> = ({
           <p className="text-xs text-muted-foreground mt-0.5">Estudo geral — todas as questões</p>
         </div>
         <div className="text-right">
-          <p className="text-sm font-extrabold text-foreground">60 q.</p>
-          <p className="text-xs text-muted-foreground">100 pts</p>
+          <p className="text-sm font-extrabold text-foreground">{totalQuestoes} q.</p>
+          <p className="text-xs text-muted-foreground">{totalPontos} pts</p>
         </div>
       </div>
     </button>
@@ -213,7 +225,7 @@ const MateriaSelector: React.FC<MateriaSelectorProps> = ({
     {/* Matérias do edital */}
     <div className="grid grid-cols-1 gap-2">
       {subjects.map((s) => {
-        const peso = PESOS_EDITAL[s.name];
+        const peso = pesos[s.id];
         const qtdNobanco = totalBySubject[s.id] || 0;
         const isSelected = selectedSubject === s.id;
         const cor = peso?.cor || "#6B7280";
@@ -253,12 +265,12 @@ const MateriaSelector: React.FC<MateriaSelectorProps> = ({
             </div>
 
             {/* Barra de peso visual */}
-            {peso && (
+            {peso && peso.pontos > 0 && (
               <div className="mt-2 h-1 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${(peso.pontos / 100) * 100}%`,
+                    width: `${maxPontos > 0 ? (peso.pontos / maxPontos) * 100 : 0}%`,
                     backgroundColor: cor,
                   }}
                 />
@@ -272,7 +284,7 @@ const MateriaSelector: React.FC<MateriaSelectorProps> = ({
     {/* Legenda */}
     <div className="mt-3 p-3 bg-muted/40 rounded-xl">
       <p className="text-[10px] text-muted-foreground text-center">
-        🎯 <strong>Prova GCM Manaus 2026:</strong> 60 questões · 100 pontos · Nota mínima: 60pts
+        🎯 <strong>Prova {concursoNome}:</strong> {totalQuestoes} questões · {totalPontos} pontos
       </p>
     </div>
   </div>
@@ -280,8 +292,29 @@ const MateriaSelector: React.FC<MateriaSelectorProps> = ({
 
 const QuestionsPage: React.FC = () => {
   const { user } = useAuth();
+  const { concursoId, concursoAtual } = useConcurso();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  // Pesos/contagens da prova derivados do banco (válido p/ qualquer concurso)
+  const pesos = useMemo(() => {
+    const map: Record<string, PesoInfo> = {};
+    subjects.forEach((s, i) => {
+      map[s.id] = pesoFromSubject(s, s.order_num ? s.order_num - 1 : i);
+    });
+    return map;
+  }, [subjects]);
+  const totalQuestoes = useMemo(
+    () => Object.values(pesos).reduce((acc, p) => acc + p.questoes, 0),
+    [pesos],
+  );
+  const totalPontos = useMemo(
+    () => Math.round(Object.values(pesos).reduce((acc, p) => acc + p.pontos, 0) * 10) / 10,
+    [pesos],
+  );
+  const maxPontos = useMemo(
+    () => Object.values(pesos).reduce((acc, p) => Math.max(acc, p.pontos), 0),
+    [pesos],
+  );
   const [topics, setTopics] = useState<Topic[]>([]);
   const [totalBySubject, setTotalBySubject] = useState<Record<string, number>>({});
   const [showMateriaSelector, setShowMateriaSelector] = useState(false);
@@ -365,14 +398,15 @@ const QuestionsPage: React.FC = () => {
     }
   }, [fetchAndStoreQuestions]);
 
-  // Fetch subjects, topics e contagem por matéria
+  // Fetch subjects, topics e contagem por matéria (do concurso ativo)
   useEffect(() => {
+    if (!concursoId) return;
     const fetchMeta = async () => {
       try {
         const [subRes, topRes, questionSubjectRows] = await Promise.all([
-          supabase.from("subjects").select("*").order("order_num"),
+          supabase.from("subjects").select("*").eq("concurso_id", concursoId).order("order_num"),
           supabase.from("topics").select("*"),
-          fetchAllPublishedQuestionSubjectIds(),
+          fetchAllPublishedQuestionSubjectIds(concursoId),
         ]);
         if (subRes.data) setSubjects(subRes.data);
         if (topRes.data) setTopics(topRes.data);
@@ -388,7 +422,7 @@ const QuestionsPage: React.FC = () => {
       }
     };
     fetchMeta();
-  }, []);
+  }, [concursoId]);
 
   // Fetch user progress
   useEffect(() => {
@@ -421,11 +455,13 @@ const QuestionsPage: React.FC = () => {
 
   // Restore session
   useEffect(() => {
-    if (!user) {
+    if (!user || !concursoId) {
       setRestoringSession(false);
       restoredSessionRef.current = null;
       return;
     }
+
+    setRestoringSession(true);
 
     const restore = async () => {
       try {
@@ -433,7 +469,8 @@ const QuestionsPage: React.FC = () => {
           .from("study_sessions")
           .select("*")
           .eq("user_id", user.id)
-          .single();
+          .eq("concurso_id", concursoId)
+          .maybeSingle();
 
         let session: SessionData | null = null;
 
@@ -448,7 +485,7 @@ const QuestionsPage: React.FC = () => {
           };
         }
 
-        if (!session) session = loadSessionLocal(user.id);
+        if (!session) session = loadSessionLocal(user.id, concursoId);
 
         restoredSessionRef.current = session;
 
@@ -472,11 +509,11 @@ const QuestionsPage: React.FC = () => {
     };
 
     restore();
-  }, [user]);
+  }, [user, concursoId]);
 
   // Fetch questions when filters change
   useEffect(() => {
-    if (restoringSession || !progressLoaded) return;
+    if (restoringSession || !progressLoaded || !concursoId) return;
 
     const fetchQuestions = async () => {
       const requestId = ++activeRequestRef.current;
@@ -510,6 +547,7 @@ const QuestionsPage: React.FC = () => {
 
       try {
         const allQuestionIds = await fetchAllPublishedQuestionIds({
+          concursoId,
           subjectId: selectedSubject !== "all" ? selectedSubject : undefined,
           topicId: selectedTopic !== "all" ? selectedTopic : undefined,
           difficulty: selectedDifficulty !== "all"
@@ -594,7 +632,7 @@ const QuestionsPage: React.FC = () => {
     };
     fetchQuestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSubject, selectedTopic, selectedDifficulty, selectedStatus, restoringSession, progressLoaded]);
+  }, [concursoId, selectedSubject, selectedTopic, selectedDifficulty, selectedStatus, restoringSession, progressLoaded]);
 
   const persistSession = useCallback((
     questionIds: string[],
@@ -602,18 +640,18 @@ const QuestionsPage: React.FC = () => {
     correct: number,
     total: number,
   ) => {
-    if (!user) return;
+    if (!user || !concursoId) return;
     const filters = { subject: selectedSubject, topic: selectedTopic, difficulty: selectedDifficulty, status: selectedStatus };
     const sessionData: SessionData = { questionIds, currentIndex: idx, sessionCorrect: correct, sessionTotal: total, filters, updatedAt: new Date().toISOString() };
-    saveSessionLocal(user.id, sessionData);
+    saveSessionLocal(user.id, concursoId, sessionData);
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       await supabase.from("study_sessions").upsert({
-        user_id: user.id, question_ids: questionIds, current_index: idx,
+        user_id: user.id, concurso_id: concursoId, question_ids: questionIds, current_index: idx,
         session_correct: correct, session_total: total, filters, updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
+      }, { onConflict: "user_id,concurso_id" });
     }, 500);
-  }, [user, selectedSubject, selectedTopic, selectedDifficulty, selectedStatus]);
+  }, [user, concursoId, selectedSubject, selectedTopic, selectedDifficulty, selectedStatus]);
 
   useEffect(() => {
     if (!user || loading || restoringSession || questionIds.length === 0) return;
@@ -624,7 +662,7 @@ const QuestionsPage: React.FC = () => {
     if (!user) return;
     const handleBeforeUnload = () => {
       if (questionIds.length > 0) {
-        saveSessionLocal(user.id, {
+        saveSessionLocal(user.id, concursoId, {
           questionIds,
           currentIndex, sessionCorrect, sessionTotal,
           filters: { subject: selectedSubject, topic: selectedTopic, difficulty: selectedDifficulty, status: selectedStatus },
@@ -696,10 +734,12 @@ const QuestionsPage: React.FC = () => {
     setCurrentIndex(0); setSelectedOption(null); setAnswered(false);
     setSessionFinished(false); setSessionCorrect(0); setSessionTotal(0);
     if (user) {
-      clearSessionLocal(user.id);
-      supabase.from("study_sessions").delete().eq("user_id", user.id);
+      clearSessionLocal(user.id, concursoId);
+      let del = supabase.from("study_sessions").delete().eq("user_id", user.id);
+      if (concursoId) del = del.eq("concurso_id", concursoId);
+      del.then(({ error }) => { if (error) console.error("Failed to clear session:", error); });
     }
-  }, [user]);
+  }, [user, concursoId]);
 
   const handleAnswer = async () => {
     if (!selectedOption || !currentQuestion || !user) return;
@@ -783,7 +823,7 @@ const QuestionsPage: React.FC = () => {
             <SelectItem value="all">Todas as matérias</SelectItem>
             {subjects.map((s) => (
               <SelectItem key={s.id} value={s.id}>
-                {s.name} {PESOS_EDITAL[s.name] ? `(${PESOS_EDITAL[s.name].questoes}q · ${PESOS_EDITAL[s.name].pontos}pts)` : ""}
+                {s.name} {pesos[s.id] ? `(${pesos[s.id].questoes}q · ${pesos[s.id].pontos}pts)` : ""}
               </SelectItem>
             ))}
           </SelectContent>
@@ -865,11 +905,11 @@ const QuestionsPage: React.FC = () => {
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Questão atual</p>
           <p className="text-sm font-semibold text-foreground">{subjectName(currentQuestion.subject_id)}</p>
           {(() => {
-            const peso = PESOS_EDITAL[subjectName(currentQuestion.subject_id)];
+            const peso = pesos[currentQuestion.subject_id];
             return peso ? (
               <div className="flex items-center gap-2 mt-1.5">
                 <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${(peso.pontos / 100) * 100}%`, backgroundColor: peso.cor }} />
+                  <div className="h-full rounded-full" style={{ width: `${maxPontos > 0 ? (peso.pontos / maxPontos) * 100 : 0}%`, backgroundColor: peso.cor }} />
                 </div>
                 <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">
                   {peso.questoes}q · {peso.pontos}pts
@@ -919,9 +959,9 @@ const QuestionsPage: React.FC = () => {
               {selectedSubject !== "all" && (
                 <span className="ml-1 text-primary font-bold">
                   · {subjectName(selectedSubject)}
-                  {PESOS_EDITAL[subjectName(selectedSubject)] && (
+                  {pesos[selectedSubject] && (
                     <span className="text-muted-foreground font-normal">
-                      {" "}({PESOS_EDITAL[subjectName(selectedSubject)].questoes}q na prova)
+                      {" "}({pesos[selectedSubject].questoes}q na prova)
                     </span>
                   )}
                 </span>
@@ -971,6 +1011,11 @@ const QuestionsPage: React.FC = () => {
           selectedSubject={selectedSubject}
           onSelect={handleMateriaSelect}
           totalBySubject={totalBySubject}
+          pesos={pesos}
+          totalQuestoes={totalQuestoes}
+          totalPontos={totalPontos}
+          maxPontos={maxPontos}
+          concursoNome={concursoAtual?.nome ?? ""}
         />
       )}
 
@@ -1023,7 +1068,7 @@ const QuestionsPage: React.FC = () => {
                 <div className="flex flex-wrap gap-1.5 mb-5">
                   {(() => {
                     const nome = subjectName(currentQuestion.subject_id);
-                    const peso = PESOS_EDITAL[nome];
+                    const peso = pesos[currentQuestion.subject_id];
                     return (
                       <span
                         className="px-2.5 py-1 text-white text-[11px] font-bold rounded-md"
