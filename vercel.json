@@ -32,7 +32,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pay.hotmart.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://pbasnajelbmpeiajwegl.supabase.co; frame-src https://pay.hotmart.com; object-src 'none'; base-uri 'self'; form-action 'self';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pay.hotmart.com https://static.hotmart.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://static.hotmart.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://pbasnajelbmpeiajwegl.supabase.co https://www.facebook.com https://api.resend.com; frame-src https://pay.hotmart.com https://*.hotmart.com; object-src 'none'; base-uri 'self'; form-action 'self' https://pay.hotmart.com;"
         },
         {
           "key": "Cross-Origin-Opener-Policy",
