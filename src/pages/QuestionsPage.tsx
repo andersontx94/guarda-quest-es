@@ -584,16 +584,20 @@ const QuestionsPage: React.FC = () => {
           initialCorrect = restoredSession.sessionCorrect;
           initialTotal = restoredSession.sessionTotal;
 
-          const restoredQuestionId = restoredSession.questionIds[
-            Math.min(restoredSession.currentIndex, restoredSession.questionIds.length - 1)
-          ];
+          // Only restore saved position if the user has actually answered questions in this session.
+          // A saved index with no answers means the user only navigated without engaging — start fresh.
+          if (initialTotal > 0) {
+            const restoredQuestionId = restoredSession.questionIds[
+              Math.min(restoredSession.currentIndex, restoredSession.questionIds.length - 1)
+            ];
 
-          if (restoredQuestionId) {
-            const matchedIndex = filteredQuestionIds.indexOf(restoredQuestionId);
-            if (matchedIndex >= 0) {
-              initialIndex = matchedIndex;
-            } else {
-              initialIndex = Math.min(restoredSession.currentIndex, filteredQuestionIds.length - 1);
+            if (restoredQuestionId) {
+              const matchedIndex = filteredQuestionIds.indexOf(restoredQuestionId);
+              if (matchedIndex >= 0) {
+                initialIndex = matchedIndex;
+              } else {
+                initialIndex = Math.min(restoredSession.currentIndex, filteredQuestionIds.length - 1);
+              }
             }
           }
         }
