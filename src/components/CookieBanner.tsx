@@ -65,36 +65,46 @@ const CookieBanner: React.FC = () => {
       <div
         className="bg-card border border-border"
         style={{
-          margin: "16px", borderRadius: "16px",
-          padding: "20px 24px", pointerEvents: "all",
+          margin: "12px", borderRadius: "16px",
+          padding: "14px 16px", pointerEvents: "all",
           boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
         }}
       >
-        <div className="flex items-start gap-3 max-w-4xl mx-auto">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-            style={{ background: "var(--gradient-hero)" }}
-          >
-            <Cookie className="w-4 h-4 text-white" />
+        <div className="max-w-4xl mx-auto">
+          {/* Linha 1: ícone + texto + fechar */}
+          <div className="flex items-start gap-2.5 mb-3">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+              style={{ background: "var(--gradient-hero)" }}
+            >
+              <Cookie className="w-3.5 h-3.5 text-white" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-foreground mb-0.5">Sua privacidade importa</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Usamos apenas <strong className="text-foreground">cookies essenciais</strong>.
+                Ao continuar, você concorda com nossos{" "}
+                <Link to="/termos" className="text-primary hover:underline">Termos</Link>
+                {" "}e{" "}
+                <Link to="/privacidade" className="text-primary hover:underline">Privacidade</Link>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => salvarConsentimento(false)}
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-foreground mb-1">Sua privacidade importa</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Usamos apenas <strong className="text-foreground">cookies essenciais</strong> para manter
-              sua sessão ativa. Não rastreamos você para publicidade. Ao continuar, você concorda com
-              nossos{" "}
-              <Link to="/termos" className="text-primary hover:underline">Termos de Uso</Link>
-              {" "}e{" "}
-              <Link to="/privacidade" className="text-primary hover:underline">Política de Privacidade</Link>.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Linha 2: botões em linha cheia */}
+          <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-xl text-xs"
+              className="flex-1 h-8 rounded-xl text-xs"
               onClick={() => salvarConsentimento(false)}
               disabled={saving}
             >
@@ -102,7 +112,7 @@ const CookieBanner: React.FC = () => {
             </Button>
             <Button
               size="sm"
-              className="h-9 rounded-xl text-xs font-bold"
+              className="flex-1 h-8 rounded-xl text-xs font-bold"
               style={{ background: "var(--gradient-hero)" }}
               onClick={() => salvarConsentimento(true)}
               disabled={saving}
@@ -110,13 +120,6 @@ const CookieBanner: React.FC = () => {
               {saving ? "Salvando..." : "Aceitar todos"}
             </Button>
           </div>
-
-          <button
-            onClick={() => salvarConsentimento(false)}
-            className="text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-0.5"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       </div>
     </div>
